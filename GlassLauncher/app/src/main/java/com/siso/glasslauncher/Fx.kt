@@ -34,6 +34,8 @@ object Fx {
     var animations by mutableStateOf(true)
         private set
 
+    @JvmName("doAnimations")
+
     fun setAnimations(v: Boolean) {
         animations = v
         sp.edit().putBoolean("animations", v).apply()
@@ -106,6 +108,8 @@ object AudioFx {
         Fx.sp.edit().putString("eq_sel", id).apply()
         apply()
     }
+
+    @JvmName("doEnabled")
 
     fun setEnabled(v: Boolean) {
         enabled = v

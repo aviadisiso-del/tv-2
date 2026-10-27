@@ -211,11 +211,18 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    @JvmName("doShowWeather")
+
     fun setShowWeather(v: Boolean) { showWeather = v; prefs.showWeather = v }
+    @JvmName("doShowMusic")
     fun setShowMusic(v: Boolean) { showMusic = v; prefs.showMusic = v }
+    @JvmName("doShowClock")
     fun setShowClock(v: Boolean) { showClock = v; prefs.showClock = v }
+    @JvmName("doShowContinue")
     fun setShowContinue(v: Boolean) { showContinue = v; prefs.showContinue = v }
+    @JvmName("doUserName")
     fun setUserName(v: String) { userName = v; prefs.userName = v }
+    @JvmName("doHeroMode")
     fun setHeroMode(v: Int) { heroMode = v; prefs.heroMode = v }
     fun setTagline(v: Int) { taglineIndex = v.coerceIn(0, TAGLINES.size - 1); prefs.tagline = taglineIndex }
 
