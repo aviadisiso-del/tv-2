@@ -1,16 +1,14 @@
-import android.database.Cursor;
-import android.net.Uri;
-import android.util.Log;
-import androidx.tvprovider.media.tv.TvContractCompat;
-import androidx.tvprovider.media.tv.WatchNextProgram;
 package com.siso.glasslauncher
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.database.Cursor
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,10 +21,10 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -51,6 +49,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.tvprovider.media.tv.TvContractCompat
+import androidx.tvprovider.media.tv.WatchNextProgram
 
 class MainActivity : ComponentActivity() {
 
@@ -73,47 +73,14 @@ class MainActivity : ComponentActivity() {
             vm.reloadApps(force = true)
         }
     }
-@Override
-protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    setContentView(R.layout.activity_main);
 
-    // קריאה לשליפת נתוני המשך צפייה
-    fetchWatchNextContent();
-}
-    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideSystemBars()
-        public void fetchWatchNextContent() {
-    try {
-        Uri watchNextUri = TvContractCompat.WatchNextPrograms.CONTENT_URI;
-        
-        Cursor cursor = getContentResolver().query(
-            watchNextUri, 
-            WatchNextProgram.PROJECTION, 
-            null, 
-            null, 
-            null
-        );
 
-        if (cursor != null) {
-            while (cursor.moveToNext()) {
-                WatchNextProgram program = WatchNextProgram.fromCursor(cursor);
-                
-                String title = program.getTitle();            
-                Uri posterUri = program.getPosterArtUri();     
-                String packageName = program.getPackageName(); 
-                
-                Log.d("GlassLauncher", "Found item: " + title + " from " + packageName);
-            }
-            cursor.close();
-        }
-    } catch (Exception e) {
-        Log.e("GlassLauncher", "Error fetching watch next data", e);
-    }
-}
+        // קריאה לשליפת נתוני המשך צפייה עם פתיחת הלאנצ'ר
+        fetchWatchNextContent()
 
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)
@@ -203,6 +170,34 @@ protected void onCreate(Bundle savedInstanceState) {
                     }
                 }
             }
+        }
+    }
+
+    private fun fetchWatchNextContent() {
+        try {
+            val watchNextUri: Uri = TvContractCompat.WatchNextPrograms.CONTENT_URI
+            
+            val cursor: Cursor? = contentResolver.query(
+                watchNextUri, 
+                WatchNextProgram.PROJECTION, 
+                null, 
+                null, 
+                null
+            )
+
+            cursor?.use {
+                while (it.moveToNext()) {
+                    val program = WatchNextProgram.fromCursor(it)
+                    
+                    val title = program.title            
+                    val posterUri = program.posterArtUri     
+                    val packageName = program.packageName 
+                    
+                    Log.d("GlassLauncher", "Found item: $title from $packageName")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("GlassLauncher", "Error fetching watch next data", e)
         }
     }
 
