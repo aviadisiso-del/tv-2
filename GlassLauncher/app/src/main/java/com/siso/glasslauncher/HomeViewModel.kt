@@ -253,9 +253,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun setShowMusic(v: Boolean) { showMusic = v; prefs.showMusic = v }
     @JvmName("doShowClock")
     fun setShowClock(v: Boolean) { showClock = v; prefs.showClock = v }
-    @JvmName("doShowContinue")
     @JvmName("doShowReco")
     fun setShowReco(v: Boolean) { showReco = v; prefs.showReco = v }
+    @JvmName("doShowContinue")
     fun setShowContinue(v: Boolean) { showContinue = v; prefs.showContinue = v }
     @JvmName("doUserName")
     fun setUserName(v: String) { userName = v; prefs.userName = v }
