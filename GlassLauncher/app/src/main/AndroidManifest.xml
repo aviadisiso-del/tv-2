@@ -39,20 +39,13 @@
             android:stateNotNeeded="true"
             android:screenOrientation="landscape"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|uiMode|density|smallestScreenSize|layoutDirection|locale">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.HOME" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <intent-filter>
-    <action android:name="android.intent.action.MAIN" />
-    
-    <!-- הופך את האפליקציה ללאנצ'ר ומסך בית -->
-    <category android:name="android.intent.category.HOME" />
-    <category android:name="android.intent.category.DEFAULT" />
-</intent-filter>
-            </intent-filter>
+       <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+        <category android:name="android.intent.category.HOME" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+    </intent-filter>
         </activity>
 
         <!-- Translucent menu that floats over any app (remote's settings / TV buttons). -->
