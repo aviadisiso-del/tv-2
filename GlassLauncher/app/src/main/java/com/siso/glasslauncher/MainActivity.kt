@@ -73,11 +73,47 @@ class MainActivity : ComponentActivity() {
             vm.reloadApps(force = true)
         }
     }
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_main);
 
+    // קריאה לשליפת נתוני המשך צפייה
+    fetchWatchNextContent();
+}
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideSystemBars()
+        public void fetchWatchNextContent() {
+    try {
+        Uri watchNextUri = TvContractCompat.WatchNextPrograms.CONTENT_URI;
+        
+        Cursor cursor = getContentResolver().query(
+            watchNextUri, 
+            WatchNextProgram.PROJECTION, 
+            null, 
+            null, 
+            null
+        );
+
+        if (cursor != null) {
+            while (cursor.moveToNext()) {
+                WatchNextProgram program = WatchNextProgram.fromCursor(cursor);
+                
+                String title = program.getTitle();            
+                Uri posterUri = program.getPosterArtUri();     
+                String packageName = program.getPackageName(); 
+                
+                Log.d("GlassLauncher", "Found item: " + title + " from " + packageName);
+            }
+            cursor.close();
+        }
+    } catch (Exception e) {
+        Log.e("GlassLauncher", "Error fetching watch next data", e);
+    }
+}
 
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)
