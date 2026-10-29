@@ -10,7 +10,8 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- "Continue watching" (Android TV Watch Next). Granted from the PC by install script. -->
     <uses-permission android:name="com.android.providers.tv.permission.READ_EPG_DATA" />
-
+<uses-permission android:name="com.android.providers.tv.permission.READ_EPG_DATA" />
+    
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
