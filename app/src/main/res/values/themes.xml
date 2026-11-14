@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="glass_background">#FF0A0A0F</color>
+
+    <style name="Theme.Glass" parent="android:Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@color/glass_background</item>
+        <item name="android:colorBackground">@color/glass_background</item>
+        <item name="android:navigationBarColor">@color/glass_background</item>
+        <item name="android:statusBarColor">@color/glass_background</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>
