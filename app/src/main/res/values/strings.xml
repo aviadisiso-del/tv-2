@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GlassLauncher</string>
+
+    <!-- סרגל תפריט עליון -->
+    <string name="menu_home">בית</string>
+    <string name="menu_search">חיפוש</string>
+    <string name="menu_watch">צפייה</string>
+    <string name="menu_library">ספרייה</string>
+    <string name="menu_settings">הגדרות</string>
+
+    <!-- מסך הבית -->
+    <string name="apps_row_title">אפליקציות</string>
+    <string name="no_apps">לא נמצאו אפליקציות</string>
+    <string name="launch_failed">לא ניתן לפתוח את האפליקציה</string>
+    <string name="coming_soon">בקרוב</string>
+    <string name="coming_soon_detail">המסך הזה ייבנה בשלב הבא</string>
+
+    <!-- Top Shelf -->
+    <string name="shelf_open_hint">לחצו OK כדי לפתוח</string>
+    <string name="greeting_morning">בוקר טוב</string>
+    <string name="greeting_afternoon">צהריים טובים</string>
+    <string name="greeting_evening">ערב טוב</string>
+    <string name="greeting_night">לילה טוב</string>
+    <string name="greeting_subtitle">בחרו אפליקציה כדי להתחיל</string>
+
+    <!-- שורות תוכן -->
+    <string name="row_continue">המשך צפייה</string>
+    <string name="row_recent">נפתחו לאחרונה</string>
+    <string name="row_recommended">מומלץ עבורך</string>
+
+    <!-- עמוד 2 -->
+    <string name="page2_hint">▾ מוזיקה, משחקים וקיצורי הגדרות</string>
+    <string name="page2_title">עוד לגלות</string>
+    <string name="row_music">מוזיקה</string>
+    <string name="row_video">וידאו</string>
+    <string name="row_games">משחקים</string>
+    <string name="row_all_apps">כל האפליקציות</string>
+    <string name="row_quick_settings">קיצורי הגדרות</string>
+    <string name="qs_wifi">Wi‑Fi</string>
+    <string name="qs_bluetooth">בלוטות׳</string>
+    <string name="qs_display">תצוגה</string>
+    <string name="qs_sound">צליל</string>
+    <string name="qs_apps">אפליקציות</string>
+    <string name="qs_storage">אחסון</string>
+    <string name="qs_date">תאריך ושעה</string>
+    <string name="qs_launcher">הגדרות המסך</string>
+
+    <!-- נגן מוזיקה -->
+    <string name="row_now_playing">מתנגן עכשיו</string>
+    <string name="player_playing">מתנגן</string>
+    <string name="player_paused">מושהה</string>
+    <string name="player_nothing">שום דבר לא מתנגן כרגע</string>
+    <string name="player_nothing_hint">הפעילו מוזיקה באפליקציה כמו Spotify או YouTube Music</string>
+    <string name="player_open_app">פתח את %1$s</string>
+    <string name="media_listener_label">שליטה במדיה של GlassLauncher</string>
+
+    <!-- זמן יחסי -->
+    <string name="time_just_now">עכשיו</string>
+    <string name="time_minute_one">לפני דקה</string>
+    <string name="time_minutes">לפני %1$d דקות</string>
+    <string name="time_hour_one">לפני שעה</string>
+    <string name="time_hours_two">לפני שעתיים</string>
+    <string name="time_hours">לפני %1$d שעות</string>
+    <string name="time_yesterday">אתמול</string>
+    <string name="time_days">לפני %1$d ימים</string>
+
+    <!-- קטגוריות אפליקציה -->
+    <string name="cat_video">וידאו</string>
+    <string name="cat_audio">מוזיקה ושמע</string>
+    <string name="cat_game">משחקים</string>
+    <string name="cat_image">תמונות</string>
+    <string name="cat_news">חדשות</string>
+    <string name="cat_social">רשתות חברתיות</string>
+    <string name="cat_maps">מפות</string>
+    <string name="cat_productivity">פרודוקטיביות</string>
+    <string name="cat_tv_app">אפליקציית טלוויזיה</string>
+    <string name="cat_app">אפליקציה</string>
+
+    <!-- מזג אוויר -->
+    <string name="weather_clear">בהיר</string>
+    <string name="weather_partly_cloudy">מעונן חלקית</string>
+    <string name="weather_cloudy">מעונן</string>
+    <string name="weather_fog">ערפל</string>
+    <string name="weather_drizzle">טפטוף</string>
+    <string name="weather_rain">גשם</string>
+    <string name="weather_snow">שלג</string>
+    <string name="weather_showers">ממטרים</string>
+    <string name="weather_thunder">סופת רעמים</string>
+    <string name="weather_unknown">מזג אוויר</string>
+
+    <!-- רקעים -->
+    <string name="wallpaper_aurora">זוהר</string>
+    <string name="wallpaper_sunset">שקיעה</string>
+    <string name="wallpaper_ocean">אוקיינוס</string>
+    <string name="wallpaper_graphite">גרפיט</string>
+
+    <!-- הגדרות -->
+    <string name="settings_title">הגדרות</string>
+    <string name="settings_coming_soon">מסך ההגדרות המלא יגיע בשלב הבא</string>
+    <string name="open_android_settings">פתח הגדרות אנדרואיד</string>
+    <string name="settings_tab_hint">לחצו OK כדי לפתוח את ההגדרות</string>
+    <string name="settings_wallpaper">רקע</string>
+    <string name="settings_rows">סדר שורות</string>
+    <string name="settings_weather">מזג אוויר</string>
+    <string name="settings_cleaner">ניקוי מערכת</string>
+    <string name="settings_about">אודות</string>
+    <string name="settings_remove">הסר</string>
+
+    <string name="settings_wallpaper_hint">בחרו רקע — השינוי מוצג מיד</string>
+    <string name="settings_wallpaper_url">או תמונה מכתובת אינטרנט</string>
+    <string name="settings_wallpaper_url_placeholder">https://…</string>
+
+    <string name="settings_rows_hint">לחצו OK על שורה כדי להזיז אותה, ואז ↑/↓. OK נוסף משחרר.</string>
+    <string name="settings_rows_fixed">תמיד ראשונה</string>
+    <string name="settings_row_shown">מוצגת</string>
+    <string name="settings_row_hidden">מוסתרת</string>
+
+    <string name="settings_weather_hint">בחרו עיר לתחזית</string>
+    <string name="settings_weather_current">כעת ב%1$s: %2$d°</string>
+    <string name="settings_weather_custom">עיר אחרת</string>
+    <string name="settings_weather_placeholder">הקלידו שם עיר</string>
+    <string name="city_tel_aviv">תל אביב</string>
+    <string name="city_jerusalem">ירושלים</string>
+    <string name="city_haifa">חיפה</string>
+    <string name="city_beersheba">באר שבע</string>
+    <string name="city_eilat">אילת</string>
+    <string name="city_new_york">ניו יורק</string>
+    <string name="city_london">לונדון</string>
+    <string name="city_paris">פריז</string>
+
+    <string name="about_version">גרסה</string>
+    <string name="about_android">מערכת</string>
+    <string name="about_device">מכשיר</string>
+    <string name="about_app_memory">זיכרון האפליקציה</string>
+    <string name="about_device_memory">זיכרון פנוי במכשיר</string>
+    <string name="about_access">הרשאות</string>
+    <string name="about_access_media">שליטה במוזיקה</string>
+    <string name="about_access_usage">אפליקציות שנפתחו לאחרונה</string>
+    <string name="about_access_tv">המשך צפייה מהמערכת</string>
+    <string name="about_access_hint">הרשאות חסרות ניתנות דרך install.ps1 במחשב (חלק מהמכשירים חוסמים אותן).</string>
+    <string name="about_refresh">רענן</string>
+
+    <!-- ניקוי מערכת -->
+    <string name="cleaner_subtitle">מנקה קבצים זמניים ומשחרר זיכרון של אפליקציות ברקע</string>
+    <string name="cleaner_idle">סרקו כדי לגלות כמה מקום וזיכרון אפשר לפנות</string>
+    <string name="cleaner_scan">סרוק עכשיו</string>
+    <string name="cleaner_scanning">סורק…</string>
+    <string name="cleaner_clean">נקה</string>
+    <string name="cleaner_cleaning">מנקה…</string>
+    <string name="cleaner_scan_again">סרוק שוב</string>
+    <string name="cleaner_found">נמצאו %1$s MB של קבצים זמניים · %2$d אפליקציות ברקע</string>
+    <string name="cleaner_done">פונו %1$s MB קבצים זמניים ו־%2$s MB זיכרון</string>
+    <string name="cleaner_other_apps">מטמון של אפליקציות אחרות: %1$s MB — רק המערכת יכולה לנקות אותו</string>
+    <string name="cleaner_open_storage">פתח הגדרות אחסון</string>
+</resources>
