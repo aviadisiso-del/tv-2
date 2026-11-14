@@ -153,6 +153,9 @@ object Wallpapers {
         return bmp
     }
 
+    /** Same as the private dither but callable from SkyWallpaper in the same package. */
+    fun dither2(bmp: Bitmap) = dither(bmp)
+
     /** Tiny noise that breaks up color banding, which is very visible in smooth gradients on a big TV. */
     private fun dither(bmp: Bitmap) {
         val w = bmp.width

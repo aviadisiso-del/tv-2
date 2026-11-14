@@ -2,6 +2,7 @@ package com.siso.glasslauncher
 
 import android.app.Application
 import android.content.Context
+import android.location.LocationManager
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.getValue
@@ -12,8 +13,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Calendar
 
 class Prefs(ctx: Context) {
     private val sp = ctx.getSharedPreferences("glass", Context.MODE_PRIVATE)
@@ -84,6 +87,9 @@ val TAGLINES = listOf(
     "סרט, מוזיקה או סתם שקט?",
 )
 
+/** Special index meaning "use the live sky wallpaper". Stored as -1 in prefs. */
+const val LIVE_SKY_INDEX = -1
+
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     private val prefs = Prefs(app)
@@ -99,7 +105,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     var hidden by mutableStateOf(prefs.hidden)
         private set
 
-    var wallpaperIndex by mutableStateOf(prefs.wallpaper.coerceIn(0, Wallpapers.all.size - 1))
+    // ── Live sky ──────────────────────────────────────────────────────────────
+    /** -1 means live sky; ≥0 means a named Wallpapers.all entry */
+    var wallpaperIndex by mutableStateOf(prefs.wallpaper.coerceIn(-1, Wallpapers.all.size - 1))
         private set
     var wallpaper by mutableStateOf<ImageBitmap?>(null)
         private set
@@ -117,6 +125,22 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     var weather by mutableStateOf<WeatherData?>(null)
         private set
+
+    // ── Live sky state ────────────────────────────────────────────────────────
+    /** Current sky phase (recomputed every minute when live sky is active). */
+    var skyPhaseState by mutableStateOf(SkyPhase.MIDDAY)
+        private set
+    var skyPhaseT by mutableStateOf(0f)
+        private set
+    private var sunTimes: SunTimes.Times? = null
+    private var lastSkyRenderMinute = -1
+
+    // ── Lyrics state ──────────────────────────────────────────────────────────
+    var lyrics by mutableStateOf<List<LyricLine>?>(null)
+        private set
+    var lyricsLoading by mutableStateOf(false)
+        private set
+    private var lastLyricsTrack: String? = null
 
     var userName by mutableStateOf(prefs.userName)
         private set
@@ -190,6 +214,83 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         setWallpaper(wallpaperIndex)
         reloadApps()
         reloadContinue()
+        // Live sky: fetch sun times once and re-render every minute.
+        viewModelScope.launch {
+            fetchSunTimesAndLocation()
+            while (true) {
+                tickSky()
+                delay(60_000L)
+            }
+        }
+        // Lyrics: watch for track changes
+        viewModelScope.launch {
+            media.track.collect { t ->
+                val key = if (t != null) "${t.title}|${t.artist}" else null
+                if (key != lastLyricsTrack) {
+                    lastLyricsTrack = key
+                    if (t != null && t.artist.isNotBlank()) {
+                        fetchLyrics(t.title, t.artist, t.durationMs)
+                    } else {
+                        lyrics = null
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Live sky ──────────────────────────────────────────────────────────────
+    private fun fetchSunTimesAndLocation() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val ctx = getApplication<Application>()
+            var lat = 32.0853  // default: Tel Aviv
+            var lon = 34.7818
+            try {
+                val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                // Try GPS first, then network
+                for (provider in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
+                    @Suppress("MissingPermission")
+                    val loc = try { lm.getLastKnownLocation(provider) } catch (e: Exception) { null }
+                    if (loc != null) { lat = loc.latitude; lon = loc.longitude; break }
+                }
+            } catch (e: Exception) { /* use default */ }
+            val times = SunTimes.fetch(lat, lon)
+            withContext(Dispatchers.Main) {
+                sunTimes = times
+                tickSky()
+            }
+        }
+    }
+
+    private fun tickSky() {
+        if (wallpaperIndex != LIVE_SKY_INDEX) return
+        val cal = Calendar.getInstance()
+        val nowMins = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+        if (nowMins == lastSkyRenderMinute) return
+        lastSkyRenderMinute = nowMins
+        val sr = sunTimes?.sunriseMins ?: 360   // 06:00 default
+        val ss = sunTimes?.sunsetMins ?: 1140   // 19:00 default
+        val (phase, t) = skyPhase(nowMins, sr, ss)
+        skyPhaseState = phase
+        skyPhaseT = t
+        viewModelScope.launch(Dispatchers.Default) {
+            val bmp = SkyWallpaper.render(phase, t)
+            val soft = Wallpapers.blur(bmp)
+            withContext(Dispatchers.Main) {
+                wallpaper = bmp.asImageBitmap()
+                wallpaperBlur = soft.asImageBitmap()
+            }
+        }
+    }
+
+    // ── Lyrics ────────────────────────────────────────────────────────────────
+    private fun fetchLyrics(title: String, artist: String, durationMs: Long) {
+        viewModelScope.launch {
+            lyricsLoading = true
+            lyrics = null
+            val result = LyricsRepo.fetch(title, artist, durationMs)
+            lyrics = result
+            lyricsLoading = false
+        }
     }
 
     fun reloadApps(force: Boolean = false) {
@@ -254,15 +355,20 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setWallpaper(index: Int) {
-        val i = index.coerceIn(0, Wallpapers.all.size - 1)
+        val i = index.coerceIn(-1, Wallpapers.all.size - 1)
         prefs.wallpaper = i
         wallpaperIndex = i
-        viewModelScope.launch(Dispatchers.Default) {
-            val sharp = Wallpapers.render(Wallpapers.all[i])
-            val soft = Wallpapers.blur(sharp)
-            withContext(Dispatchers.Main) {
-                wallpaper = sharp.asImageBitmap()
-                wallpaperBlur = soft.asImageBitmap()
+        if (i == LIVE_SKY_INDEX) {
+            lastSkyRenderMinute = -1 // force immediate re-render
+            tickSky()
+        } else {
+            viewModelScope.launch(Dispatchers.Default) {
+                val sharp = Wallpapers.render(Wallpapers.all[i])
+                val soft = Wallpapers.blur(sharp)
+                withContext(Dispatchers.Main) {
+                    wallpaper = sharp.asImageBitmap()
+                    wallpaperBlur = soft.asImageBitmap()
+                }
             }
         }
     }

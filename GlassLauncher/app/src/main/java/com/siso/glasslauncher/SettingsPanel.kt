@@ -356,7 +356,8 @@ fun SettingsPanel(vm: HomeViewModel, onClose: () -> Unit, modifier: Modifier = M
                         item {
                             SettingRow(
                                 "טפטים",
-                                value = Wallpapers.all[vm.wallpaperIndex].name,
+                                value = if (vm.wallpaperIndex == LIVE_SKY_INDEX) "שמיים חיים 🌅"
+                                        else Wallpapers.all[vm.wallpaperIndex].name,
                                 chevron = true,
                                 focusRequester = firstFocus,
                             ) { page = Page.Wallpapers }
@@ -412,11 +413,32 @@ fun SettingsPanel(vm: HomeViewModel, onClose: () -> Unit, modifier: Modifier = M
                     }
 
                     Page.Wallpapers -> {
+                        // Live sky option first
+                        item {
+                            SettingRow(
+                                "שמיים חיים 🌅",
+                                value = "לפי שעה ומיקום",
+                                checked = vm.wallpaperIndex == LIVE_SKY_INDEX,
+                                focusRequester = firstFocus,
+                                leading = {
+                                    Box(
+                                        Modifier
+                                            .size(width = 34.dp, height = 20.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    listOf(Color(0xFF0B1F3A), Color(0xFFFF9040), Color(0xFF3A7AC8)),
+                                                ),
+                                            ),
+                                    )
+                                },
+                            ) { vm.setWallpaper(LIVE_SKY_INDEX) }
+                        }
+                        // Named wallpapers
                         itemsIndexed(Wallpapers.all) { i, spec ->
                             SettingRow(
                                 spec.name,
                                 checked = i == vm.wallpaperIndex,
-                                focusRequester = if (i == 0) firstFocus else null,
                                 leading = {
                                     Box(
                                         Modifier
