@@ -52,6 +52,7 @@ import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import android.net.wifi.WifiManager
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
@@ -269,17 +270,33 @@ class PhotoServer(private val ctx: Context, private val onAdded: (String) -> Uni
         server = null
     }
 
-    private fun localIp(): String? =
+    private fun localIp(): String? {
+        // 1. WifiManager — works for Wi-Fi connections
         try {
-            NetworkInterface.getNetworkInterfaces().toList()
-                .filter { it.isUp && !it.isLoopback }
-                .flatMap { it.inetAddresses.toList() }
-                .filterIsInstance<Inet4Address>()
-                .firstOrNull { it.isSiteLocalAddress }
+            val wm = ctx.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            if (wm != null) {
+                @Suppress("DEPRECATION")
+                val ip = wm.connectionInfo?.ipAddress ?: 0
+                if (ip != 0) {
+                    return String.format(
+                        "%d.%d.%d.%d",
+                        ip and 0xff, ip shr 8 and 0xff, ip shr 16 and 0xff, ip shr 24 and 0xff
+                    )
+                }
+            }
+        } catch (_: Throwable) {}
+        // 2. Scan all network interfaces — works for Ethernet (common on Android TV boxes)
+        return try {
+            NetworkInterface.getNetworkInterfaces()?.toList()
+                ?.filter { it.isUp && !it.isLoopback }
+                ?.flatMap { it.inetAddresses.toList() }
+                ?.filterIsInstance<Inet4Address>()
+                ?.firstOrNull { it.isSiteLocalAddress }
                 ?.hostAddress
         } catch (e: Throwable) {
             null
         }
+    }
 
     private fun readLine(input: InputStream): String? {
         val sb = StringBuilder()

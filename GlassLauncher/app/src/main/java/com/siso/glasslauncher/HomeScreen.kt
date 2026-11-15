@@ -353,7 +353,7 @@ fun HomeScreen(
                     listState = listState,
                     rowFocus = rowFocus,
                     onLaunch = { app, bounds ->
-                        launching = LaunchAnim(bounds, app.banner ?: app.icon, app.banner != null) { vm.openApp(app) }
+                        launching = LaunchAnim(bounds, app.banner ?: app.icon, app.banner != null) { vm.openApp(app, android.graphics.Rect(bounds.left.toInt(), bounds.top.toInt(), bounds.right.toInt(), bounds.bottom.toInt())) }
                     },
                     onFocusIndex = { vm.homeFocus = it },
                     onStartMove = { moving = it.pkg },
@@ -417,7 +417,7 @@ fun HomeScreen(
                 UsedRow(
                     "הכי בשימוש אצלך", used, en1,
                     firstFocus = if (!hasCont) row1Focus else null, onUp = if (!hasCont) goUp else null,
-                ) { app, bounds -> launching = LaunchAnim(bounds, app.banner ?: app.icon, app.banner != null) { vm.openApp(app) } }
+                ) { app, bounds -> launching = LaunchAnim(bounds, app.banner ?: app.icon, app.banner != null) { vm.openApp(app, android.graphics.Rect(bounds.left.toInt(), bounds.top.toInt(), bounds.right.toInt(), bounds.bottom.toInt())) } }
             }
             if (!hasCont && !hasReco && !hasUsed) {
                 T("אין עדיין המלצות או המשך צפייה.", 14.sp, FontWeight.Medium)
@@ -467,7 +467,7 @@ fun HomeScreen(
                 focus = overlayFocus,
                 onOpen = { app, bounds ->
                     appsOpen = false
-                    launching = LaunchAnim(bounds, app.banner ?: app.icon, app.banner != null) { vm.openApp(app) }
+                    launching = LaunchAnim(bounds, app.banner ?: app.icon, app.banner != null) { vm.openApp(app, android.graphics.Rect(bounds.left.toInt(), bounds.top.toInt(), bounds.right.toInt(), bounds.bottom.toInt())) }
                 },
             )
         }

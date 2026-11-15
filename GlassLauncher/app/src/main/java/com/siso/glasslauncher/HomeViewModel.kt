@@ -338,8 +338,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun openApp(app: AppEntry): Boolean {
-        val ok = repo.launch(app)
+    fun openApp(app: AppEntry, sourceBounds: android.graphics.Rect? = null): Boolean {
+        val ok = repo.launch(app, sourceBounds)
         if (ok) {
             val m = launchCounts.toMutableMap()
             m[app.pkg] = (m[app.pkg] ?: 0) + 1

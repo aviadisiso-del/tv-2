@@ -1,8 +1,10 @@
 package com.siso.glasslauncher
 
+import android.app.ActivityOptions
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Rect as AndroidRect
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.graphics.Bitmap
@@ -94,26 +96,32 @@ class AppsRepo(private val ctx: Context) {
     }
 
     /** Returns false if the app could not be started (so the UI can undo its launch animation). */
-    fun launch(app: AppEntry): Boolean {
+    fun launch(app: AppEntry, sourceBounds: AndroidRect? = null): Boolean {
         val category = if (app.isLeanback) Intent.CATEGORY_LEANBACK_LAUNCHER else Intent.CATEGORY_LAUNCHER
         val intent = Intent(Intent.ACTION_MAIN)
             .addCategory(category)
             .setComponent(app.component)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        val opts = sourceBounds?.let {
+            ActivityOptions.makeScaleUpAnimation(null, it.left, it.top, it.width(), it.height()).toBundle()
+        }
         return try {
-            ctx.startActivity(intent)
+            ctx.startActivity(intent, opts)
             true
         } catch (e: Exception) {
-            launchPackage(app.pkg)
+            launchPackage(app.pkg, sourceBounds)
         }
     }
 
-    fun launchPackage(pkg: String): Boolean {
+    fun launchPackage(pkg: String, sourceBounds: AndroidRect? = null): Boolean {
         val pm = ctx.packageManager
         val intent = pm.getLeanbackLaunchIntentForPackage(pkg) ?: pm.getLaunchIntentForPackage(pkg) ?: return false
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val opts = sourceBounds?.let {
+            ActivityOptions.makeScaleUpAnimation(null, it.left, it.top, it.width(), it.height()).toBundle()
+        }
         return try {
-            ctx.startActivity(intent)
+            ctx.startActivity(intent, opts)
             true
         } catch (e: Exception) {
             false
