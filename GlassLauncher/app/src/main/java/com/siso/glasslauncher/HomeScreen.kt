@@ -451,8 +451,8 @@ fun HomeScreen(
         AnimatedVisibility(
             visible = musicOpen && currentTrack != null,
             modifier = Modifier.fillMaxSize(),
-            enter = if (animOn) fadeIn(tween(300, easing = FastOutSlowInEasing)) + scaleIn(tween(340, easing = FastOutSlowInEasing), initialScale = 1.04f) else EnterTransition.None,
-            exit = if (animOn) fadeOut(tween(220)) + scaleOut(tween(260, easing = FastOutSlowInEasing), targetScale = 1.03f) else ExitTransition.None,
+            enter = if (animOn) fadeIn(tween(380, easing = FastOutSlowInEasing)) + scaleIn(tween(420, easing = FastOutSlowInEasing), initialScale = 0.86f) else EnterTransition.None,
+            exit = if (animOn) fadeOut(tween(260)) + scaleOut(tween(300, easing = FastOutSlowInEasing), targetScale = 0.90f) else ExitTransition.None,
         ) {
             currentTrack?.let { MusicExpanded(track = it, vm = vm, focus = overlayFocus) }
         }
@@ -1441,39 +1441,53 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
         }
     }
 
-    // Background: the cover's own tones, with two glows that drift slowly.
+    val t = tones
+    val c1 by animateColorAsState(t?.getOrNull(0) ?: Color(0xFF1A2233), tween(700), label = "c1")
+    val c2 by animateColorAsState(t?.getOrNull(1) ?: Color(0xFF111827), tween(700), label = "c2")
+
+    // Background: blurred cover art + dark overlay
     Box(modifier.fillMaxSize().background(Color(0xFF0B0D14))) {
-        val t = tones
-        val c1 by animateColorAsState(t?.getOrNull(0) ?: Color(0xFF1A2233), tween(700), label = "c1")
-        val c2 by animateColorAsState(t?.getOrNull(1) ?: Color(0xFF111827), tween(700), label = "c2")
-        val c3 by animateColorAsState(t?.getOrNull(2) ?: Color(0xFF0B0D14), tween(700), label = "c3")
-        val drift = if (animOn) {
-            rememberInfiniteTransition(label = "playerBg").animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(tween(40_000, easing = LinearEasing)),
-                label = "playerBgPhase",
+        // Blurred cover background (2)
+        if (art != null) {
+            Image(
+                bitmap = art,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        if (android.os.Build.VERSION.SDK_INT >= 31) {
+                            renderEffect = androidx.compose.ui.graphics.RenderEffect.asComposeRenderEffect(
+                                android.graphics.RenderEffect.createBlurEffect(80f, 80f, android.graphics.Shader.TileMode.CLAMP)
+                            )
+                        } else {
+                            alpha = 0.35f
+                        }
+                    }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(Color(0xBB000000))
+                    },
             )
         } else {
-            null
-        }
-        Canvas(Modifier.fillMaxSize()) {
-            val ph = (drift?.value ?: 0f) * 6.2832f
-            drawRect(Brush.linearGradient(listOf(c1, c2, c3), start = Offset(0f, 0f), end = Offset(size.width, size.height)))
-            drawRect(
-                Brush.radialGradient(
-                    listOf(c2.copy(alpha = 0.55f), Color.Transparent),
-                    center = Offset(size.width * (0.28f + 0.10f * sin(ph)), size.height * (0.5f + 0.12f * cos(ph))),
-                    radius = size.height * 0.9f,
-                ),
-            )
-            drawRect(
-                Brush.radialGradient(
-                    listOf(c1.copy(alpha = 0.50f), Color.Transparent),
-                    center = Offset(size.width * (0.78f + 0.08f * cos(ph)), size.height * (0.35f + 0.10f * sin(ph))),
-                    radius = size.height * 0.7f,
-                ),
-            )
+            val drift = if (animOn) {
+                rememberInfiniteTransition(label = "playerBg").animateFloat(
+                    initialValue = 0f, targetValue = 1f,
+                    animationSpec = infiniteRepeatable(tween(40_000, easing = LinearEasing)),
+                    label = "playerBgPhase",
+                )
+            } else null
+            Canvas(Modifier.fillMaxSize()) {
+                val ph = (drift?.value ?: 0f) * 6.2832f
+                drawRect(Brush.linearGradient(listOf(c1, c2, c1), start = Offset(0f, 0f), end = Offset(size.width, size.height)))
+                drawRect(
+                    Brush.radialGradient(
+                        listOf(c2.copy(alpha = 0.55f), Color.Transparent),
+                        center = Offset(size.width * (0.28f + 0.10f * sin(ph)), size.height * (0.5f + 0.12f * cos(ph))),
+                        radius = size.height * 0.9f,
+                    ),
+                )
+            }
         }
 
         Row(
@@ -1530,30 +1544,89 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
                                 val lineAlpha by animateFloatAsState(
                                     when {
                                         isActive -> 1f
-                                        isPast -> 0.45f
-                                        else -> 0.65f
+                                        isPast -> 0.42f
+                                        else -> 0.62f
                                     },
                                     if (animOn) tween(300) else snap(),
                                     label = "lyricAlpha",
                                 )
-                                androidx.compose.foundation.text.BasicText(
-                                    text = line.text,
-                                    style = androidx.compose.ui.text.TextStyle(
-                                        color = Color.White,
-                                        fontSize = 20.sp,
-                                        fontFamily = AppFont,
-                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .graphicsLayer {
-                                            transformOrigin = TransformOrigin(0.5f, 0.5f)
-                                            scaleX = lineScale
-                                            scaleY = lineScale
-                                            alpha = lineAlpha
-                                        },
+                                // (1) Past lines tinted with cover color, future lines white-dim
+                                val lineColor by animateColorAsState(
+                                    when {
+                                        isActive -> Color.White
+                                        isPast -> c1.copy(alpha = 1f).let {
+                                            // lighten the cover tone so it's readable
+                                            Color(
+                                                (it.red * 0.6f + 0.4f).coerceIn(0f, 1f),
+                                                (it.green * 0.6f + 0.4f).coerceIn(0f, 1f),
+                                                (it.blue * 0.6f + 0.4f).coerceIn(0f, 1f),
+                                            )
+                                        }
+                                        else -> Color.White
+                                    },
+                                    if (animOn) tween(400) else snap(),
+                                    label = "lyricColor",
                                 )
+
+                                if (isActive && hasSynced) {
+                                    // (4) Active line: bold each word in sequence using inter-word timing
+                                    val words = line.text.split(" ")
+                                    // estimate which word is active based on position within the line
+                                    val nextLineMs = shown.getOrNull(i + 1)?.startMs?.takeIf { it >= 0 }
+                                    val lineDuration = if (nextLineMs != null && line.startMs >= 0) (nextLineMs - line.startMs).toFloat() else 3000f
+                                    val lineProgress = if (line.startMs >= 0 && lineDuration > 0)
+                                        ((position - line.startMs).toFloat() / lineDuration).coerceIn(0f, 1f) else 0f
+                                    val activeWord = (lineProgress * words.size).toInt().coerceIn(0, words.size - 1)
+
+                                    androidx.compose.foundation.text.BasicText(
+                                        text = androidx.compose.ui.text.buildAnnotatedString {
+                                            words.forEachIndexed { wi, word ->
+                                                if (wi > 0) append(" ")
+                                                if (wi == activeWord) {
+                                                    pushStyle(androidx.compose.ui.text.SpanStyle(
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        color = Color.White,
+                                                        fontSize = 22.sp,
+                                                    ))
+                                                    append(word)
+                                                    pop()
+                                                } else {
+                                                    append(word)
+                                                }
+                                            }
+                                        },
+                                        style = androidx.compose.ui.text.TextStyle(
+                                            color = Color.White,
+                                            fontSize = 20.sp,
+                                            fontFamily = AppFont,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .graphicsLayer {
+                                                transformOrigin = TransformOrigin(0.5f, 0.5f)
+                                                scaleX = lineScale; scaleY = lineScale; alpha = lineAlpha
+                                            },
+                                    )
+                                } else {
+                                    androidx.compose.foundation.text.BasicText(
+                                        text = line.text,
+                                        style = androidx.compose.ui.text.TextStyle(
+                                            color = lineColor,
+                                            fontSize = 20.sp,
+                                            fontFamily = AppFont,
+                                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .graphicsLayer {
+                                                transformOrigin = TransformOrigin(0.5f, 0.5f)
+                                                scaleX = lineScale; scaleY = lineScale; alpha = lineAlpha
+                                            },
+                                    )
+                                }
                             }
                         }
                     }
