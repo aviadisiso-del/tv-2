@@ -51,12 +51,23 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.produceState
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.launch
+import java.io.File
 
-enum class Page { Main, Wallpapers, Widgets, City, Apps, Display, Sound, Clean }
+enum class Page { Main, Wallpapers, AddPhone, AddUsb, Widgets, City, Apps, Display, Sound, Clean }
 
 private fun pageTitle(p: Page) = when (p) {
     Page.Main -> "הגדרות"
     Page.Wallpapers -> "טפטים"
+    Page.AddPhone -> "הוספת תמונות מהטלפון"
+    Page.AddUsb -> "הוספת תמונות מכונן USB"
     Page.Widgets -> "ווידג'טים"
     Page.City -> "עיר למזג האוויר"
     Page.Apps -> "אפליקציות במסך הבית"
@@ -318,13 +329,31 @@ fun SettingsPanel(vm: HomeViewModel, onClose: () -> Unit, modifier: Modifier = M
     val ctx = LocalContext.current
     var page by remember { mutableStateOf(Page.Main) }
     val firstFocus = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    // USB photos: reading a drive needs the storage permission; rescan once it is answered.
+    val storagePerm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES
+    else Manifest.permission.READ_EXTERNAL_STORAGE
+    var usbTick by remember { mutableStateOf(0) }
+    var usbBusy by remember { mutableStateOf<String?>(null) }
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { usbTick++ }
+    val usbFiles by produceState<List<File>?>(null, page, usbTick) {
+        value = if (page == Page.AddUsb) withContext(Dispatchers.IO) { PhotoStore.scanExternal(ctx) } else null
+    }
+    LaunchedEffect(page) {
+        if (page == Page.AddUsb &&
+            ContextCompat.checkSelfPermission(ctx, storagePerm) != PackageManager.PERMISSION_GRANTED
+        ) {
+            runCatching { permLauncher.launch(storagePerm) }
+        }
+    }
     val mediaAccess by vm.media.hasAccess.collectAsState()
     val cleanScan by produceState<Cleaner.Scan?>(null, page) {
         value = if (page == Page.Clean) withContext(Dispatchers.IO) { Cleaner.scan(ctx) } else null
     }
 
     BackHandler(enabled = true) {
-        if (page != Page.Main) page = Page.Main
+        if (page == Page.AddPhone || page == Page.AddUsb) page = Page.Wallpapers
+        else if (page != Page.Main) page = Page.Main
         else onClose()
     }
     LaunchedEffect(page) {
@@ -356,7 +385,8 @@ fun SettingsPanel(vm: HomeViewModel, onClose: () -> Unit, modifier: Modifier = M
                         item {
                             SettingRow(
                                 "טפטים",
-                                value = if (vm.wallpaperIndex == LIVE_SKY_INDEX) "שמיים חיים 🌅"
+                                value = if (vm.wallpaperPhoto.isNotEmpty()) "תמונה שלי"
+                                        else if (vm.wallpaperIndex == LIVE_SKY_INDEX) "שמיים חיים 🌅"
                                         else Wallpapers.all[vm.wallpaperIndex].name,
                                 chevron = true,
                                 focusRequester = firstFocus,
@@ -413,45 +443,103 @@ fun SettingsPanel(vm: HomeViewModel, onClose: () -> Unit, modifier: Modifier = M
                     }
 
                     Page.Wallpapers -> {
-                        // Live sky option first
-                        item {
-                            SettingRow(
-                                "שמיים חיים 🌅",
-                                value = "לפי שעה ומיקום",
-                                checked = vm.wallpaperIndex == LIVE_SKY_INDEX,
-                                focusRequester = firstFocus,
-                                leading = {
-                                    Box(
-                                        Modifier
-                                            .size(width = 34.dp, height = 20.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(
-                                                Brush.horizontalGradient(
-                                                    listOf(Color(0xFF0B1F3A), Color(0xFFFF9040), Color(0xFF3A7AC8)),
-                                                ),
+                        val builtIn = vm.wallpaperPhoto.isEmpty()
+                        item { InfoText("טפטים חיים") }
+                        // Live sky first, then the named wallpapers, three thumbnails per row.
+                        val liveRows = (listOf(LIVE_SKY_INDEX) + Wallpapers.all.indices.toList()).chunked(3)
+                        itemsIndexed(liveRows) { rowIndex, row ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                row.forEach { idx ->
+                                    if (idx == LIVE_SKY_INDEX) {
+                                        WallThumb(
+                                            name = "שמיים חיים",
+                                            selected = builtIn && vm.wallpaperIndex == LIVE_SKY_INDEX,
+                                            brush = Brush.horizontalGradient(
+                                                listOf(Color(0xFF0B1F3A), Color(0xFFFF9040), Color(0xFF3A7AC8)),
                                             ),
-                                    )
-                                },
-                            ) { vm.setWallpaper(LIVE_SKY_INDEX) }
+                                            focusRequester = if (rowIndex == 0) firstFocus else null,
+                                        ) { vm.setWallpaper(LIVE_SKY_INDEX) }
+                                    } else {
+                                        val spec = Wallpapers.all[idx]
+                                        WallThumb(
+                                            name = spec.name,
+                                            selected = builtIn && vm.wallpaperIndex == idx,
+                                            brush = Brush.verticalGradient(
+                                                listOf(Color(spec.skyTop), Color(spec.skyMid), Color(spec.skyBottom)),
+                                            ),
+                                        ) { vm.setWallpaper(idx) }
+                                    }
+                                }
+                                ThumbGap(3 - row.size)
+                            }
                         }
-                        // Named wallpapers
-                        itemsIndexed(Wallpapers.all) { i, spec ->
-                            SettingRow(
-                                spec.name,
-                                checked = i == vm.wallpaperIndex,
-                                leading = {
-                                    Box(
-                                        Modifier
-                                            .size(width = 34.dp, height = 20.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(
-                                                Brush.verticalGradient(
-                                                    listOf(Color(spec.skyTop), Color(spec.skyMid), Color(spec.skyBottom)),
-                                                ),
-                                            ),
-                                    )
-                                },
-                            ) { vm.setWallpaper(i) }
+                        item { InfoText("התמונות שלי") }
+                        if (vm.photos.isEmpty()) {
+                            item { InfoText("עדיין אין כאן תמונות. אפשר להוסיף מהטלפון או מכונן USB.") }
+                        }
+                        itemsIndexed(vm.photos.chunked(3)) { _, row ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                row.forEach { name ->
+                                    WallThumb(
+                                        name = "תמונה " + (vm.photos.indexOf(name) + 1),
+                                        selected = vm.wallpaperPhoto == name,
+                                        image = vm.photoThumbs[name],
+                                    ) { vm.usePhoto(name) }
+                                }
+                                ThumbGap(3 - row.size)
+                            }
+                        }
+                        item { SettingRow("הוסף תמונות מהטלפון (קוד QR)", chevron = true) { page = Page.AddPhone } }
+                        item { SettingRow("הוסף תמונות מכונן USB", chevron = true) { page = Page.AddUsb } }
+                        if (vm.wallpaperPhoto.isNotEmpty()) {
+                            item { SettingRow("🗑 מחק את התמונה הנוכחית") { vm.deletePhoto(vm.wallpaperPhoto) } }
+                        }
+                        item {
+                            SettingRow("תנועה בטפט", value = if (vm.liveWallpaper) "פועל" else "כבוי") {
+                                vm.toggleLiveWallpaper()
+                            }
+                        }
+                    }
+
+                    Page.AddPhone -> {
+                        item { PhoneUploadBlock(vm) }
+                        item { SettingRow("סיום", focusRequester = firstFocus) { page = Page.Wallpapers } }
+                    }
+
+                    Page.AddUsb -> {
+                        val files = usbFiles
+                        item { SettingRow("חזרה לטפטים", focusRequester = firstFocus) { page = Page.Wallpapers } }
+                        if (files == null) {
+                            item { InfoText("מחפש תמונות בכונן…") }
+                        } else if (files.isEmpty()) {
+                            item {
+                                InfoText("לא נמצאו תמונות. חבר כונן USB עם קובצי JPG או PNG, אשר את ההרשאה אם התבקשת, וחזור לכאן.")
+                            }
+                        } else {
+                            item {
+                                InfoText(usbBusy ?: "נמצאו ${files.size} תמונות. לחיצה על תמונה מוסיפה אותה ומגדירה אותה כטפט.")
+                            }
+                            itemsIndexed(files) { _, f ->
+                                SettingRow(f.name, value = f.parentFile?.name) {
+                                    usbBusy = "מוסיף את ${f.name}…"
+                                    scope.launch {
+                                        val name = withContext(Dispatchers.IO) { PhotoStore.importFile(ctx, f) }
+                                        if (name != null) {
+                                            vm.reloadPhotos()
+                                            vm.usePhoto(name)
+                                            usbBusy = "${f.name} נוספה."
+                                        } else {
+                                            usbBusy = "לא הצלחתי לקרוא את ${f.name}."
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 

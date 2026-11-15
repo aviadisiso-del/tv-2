@@ -6,6 +6,7 @@ import android.location.LocationManager
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
@@ -24,6 +25,21 @@ class Prefs(ctx: Context) {
     var wallpaper: Int
         get() = sp.getInt("wallpaper", 0)
         set(v) { sp.edit().putInt("wallpaper", v).apply() }
+
+    /** File name of the user's own photo used as the wallpaper; empty = a built-in wallpaper. */
+    var wallpaperPhoto: String
+        get() = sp.getString("wallpaperPhoto", "") ?: ""
+        set(v) { sp.edit().putString("wallpaperPhoto", v).apply() }
+
+    /** Slow drift, haze and parallax on the wallpaper. */
+    var liveWallpaper: Boolean
+        get() = sp.getBoolean("liveWallpaper", true)
+        set(v) { sp.edit().putBoolean("liveWallpaper", v).apply() }
+
+    /** Lyrics panel in the full-screen music player. */
+    var showLyrics: Boolean
+        get() = sp.getBoolean("showLyrics", true)
+        set(v) { sp.edit().putBoolean("showLyrics", v).apply() }
 
     var city: Int
         get() = sp.getInt("city", 0)
@@ -113,6 +129,20 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var wallpaperBlur by mutableStateOf<ImageBitmap?>(null)
         private set
+
+    /** The user's photo currently used as wallpaper ("" = built-in). */
+    var wallpaperPhoto by mutableStateOf(prefs.wallpaperPhoto)
+        private set
+    var liveWallpaper by mutableStateOf(prefs.liveWallpaper)
+        private set
+    var showLyrics by mutableStateOf(prefs.showLyrics)
+        private set
+    /** Index of the focused app on the home row: drives the wallpaper parallax. */
+    var homeFocus by mutableStateOf(0)
+    /** File names of the user's own wallpaper photos, oldest first. */
+    var photos by mutableStateOf<List<String>>(emptyList())
+        private set
+    val photoThumbs = mutableStateMapOf<String, ImageBitmap>()
 
     var showWeather by mutableStateOf(prefs.showWeather)
         private set
@@ -211,7 +241,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 last = t
             }
         }
-        setWallpaper(wallpaperIndex)
+        val savedPhoto = prefs.wallpaperPhoto
+        if (savedPhoto.isNotEmpty() && PhotoStore.file(app, savedPhoto).exists()) usePhoto(savedPhoto)
+        else setWallpaper(wallpaperIndex)
+        reloadPhotos()
         reloadApps()
         reloadContinue()
         // Live sky: fetch sun times once and re-render every minute.
@@ -262,7 +295,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun tickSky() {
-        if (wallpaperIndex != LIVE_SKY_INDEX) return
+        if (wallpaperIndex != LIVE_SKY_INDEX || wallpaperPhoto.isNotEmpty()) return
         val cal = Calendar.getInstance()
         val nowMins = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
         if (nowMins == lastSkyRenderMinute) return
@@ -276,8 +309,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             val bmp = SkyWallpaper.render(phase, t)
             val soft = Wallpapers.blur(bmp)
             withContext(Dispatchers.Main) {
-                wallpaper = bmp.asImageBitmap()
-                wallpaperBlur = soft.asImageBitmap()
+                if (wallpaperPhoto.isEmpty() && wallpaperIndex == LIVE_SKY_INDEX) {
+                    wallpaper = bmp.asImageBitmap()
+                    wallpaperBlur = soft.asImageBitmap()
+                }
             }
         }
     }
@@ -350,12 +385,16 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             cityIndex = c
             weather = null
         }
-        val w = prefs.wallpaper.coerceIn(0, Wallpapers.all.size - 1)
-        if (w != wallpaperIndex) setWallpaper(w)
+        val w = prefs.wallpaper.coerceIn(-1, Wallpapers.all.size - 1)
+        if (wallpaperPhoto.isEmpty() && w != wallpaperIndex) setWallpaper(w)
     }
 
     fun setWallpaper(index: Int) {
         val i = index.coerceIn(-1, Wallpapers.all.size - 1)
+        if (wallpaperPhoto.isNotEmpty()) {
+            prefs.wallpaperPhoto = ""
+            wallpaperPhoto = ""
+        }
         prefs.wallpaper = i
         wallpaperIndex = i
         if (i == LIVE_SKY_INDEX) {
@@ -366,11 +405,69 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 val sharp = Wallpapers.render(Wallpapers.all[i])
                 val soft = Wallpapers.blur(sharp)
                 withContext(Dispatchers.Main) {
-                    wallpaper = sharp.asImageBitmap()
-                    wallpaperBlur = soft.asImageBitmap()
+                    if (wallpaperPhoto.isEmpty() && wallpaperIndex == i) {
+                        wallpaper = sharp.asImageBitmap()
+                        wallpaperBlur = soft.asImageBitmap()
+                    }
                 }
             }
         }
+    }
+
+    // ── The user's own photo wallpapers ───────────────────────────────────────
+
+    fun reloadPhotos() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val ctx = getApplication<Application>()
+            val names = PhotoStore.list(ctx)
+            val fresh = names.filter { it !in photoThumbs }.mapNotNull { n ->
+                PhotoStore.thumb(ctx, n)?.let { n to it.asImageBitmap() }
+            }
+            withContext(Dispatchers.Main) {
+                fresh.forEach { photoThumbs[it.first] = it.second }
+                photos = names
+            }
+        }
+    }
+
+    fun usePhoto(name: String) {
+        prefs.wallpaperPhoto = name
+        wallpaperPhoto = name
+        viewModelScope.launch(Dispatchers.IO) {
+            val sharp = PhotoStore.load(getApplication<Application>(), name)
+            val soft = if (sharp != null) Wallpapers.blur(sharp) else null
+            withContext(Dispatchers.Main) {
+                if (wallpaperPhoto == name) {
+                    if (sharp != null && soft != null) {
+                        wallpaper = sharp.asImageBitmap()
+                        wallpaperBlur = soft.asImageBitmap()
+                    } else {
+                        setWallpaper(wallpaperIndex) // the file is gone or unreadable: back to the built-in one
+                    }
+                }
+            }
+        }
+    }
+
+    fun deletePhoto(name: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            PhotoStore.delete(getApplication<Application>(), name)
+            withContext(Dispatchers.Main) {
+                photoThumbs.remove(name)
+                if (wallpaperPhoto == name) setWallpaper(wallpaperIndex)
+                reloadPhotos()
+            }
+        }
+    }
+
+    fun toggleLiveWallpaper() {
+        liveWallpaper = !liveWallpaper
+        prefs.liveWallpaper = liveWallpaper
+    }
+
+    fun toggleLyrics() {
+        showLyrics = !showLyrics
+        prefs.showLyrics = showLyrics
     }
 
     @JvmName("doShowWeather")

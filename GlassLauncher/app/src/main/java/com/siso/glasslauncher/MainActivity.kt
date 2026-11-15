@@ -113,13 +113,8 @@ class MainActivity : ComponentActivity() {
                             label = "wallpaper",
                         ) { wallpaper ->
                             if (wallpaper != null) {
-                                Canvas(Modifier.fillMaxSize()) {
-                                    drawImage(
-                                        image = wallpaper,
-                                        dstSize = IntSize(size.width.toInt(), size.height.toInt()),
-                                        filterQuality = FilterQuality.Medium,
-                                    )
-                                }
+                                // Slow drift + haze + parallax with the focused app (off with "תנועה בטפט").
+                                LiveWallpaper(wallpaper, live = vm.liveWallpaper, focusIndex = vm.homeFocus)
                             }
                         }
                         // A little darkness toward the bottom keeps white text readable on bright wallpapers.

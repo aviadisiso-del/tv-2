@@ -96,11 +96,13 @@ fun GlassPanel(
                 }
                 drawRect(
                     Brush.verticalGradient(
-                        listOf(Color.White.copy(alpha = 0.16f), tint, Color.Black.copy(alpha = 0.16f)),
+                        listOf(Color.White.copy(alpha = 0.20f), tint, Color.Black.copy(alpha = 0.12f)),
                     ),
                 )
+                // Liquid Glass: diagonal specular sheen + bright top rim.
+                drawLiquidSheen(if (borderAlpha > 0f) 1f else 0f)
             }
-            .border(1.dp, Color.White.copy(alpha = borderAlpha), shape),
+            .border(1.dp, if (borderAlpha > 0f) LiquidRim else Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)), shape),
         content = content,
     )
 }

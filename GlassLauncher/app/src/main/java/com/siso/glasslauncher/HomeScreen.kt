@@ -105,6 +105,11 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.sin
+import kotlin.math.cos
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 
 private val Amber = Color(0xFFFFC857)
 
@@ -112,6 +117,12 @@ private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
 /** How far the content is pushed in from the start edge to make room for the side rail. */
 private val RailInset = 108.dp
+
+/** Which tile of the app row has focus (-1 = none) and where focus was before: drives dimming and tilt. */
+private class RowFocus {
+    var index by mutableStateOf(-1)
+    var last = 0
+}
 
 /** A launch zoom: grows [image] from [from] to the whole screen, then runs [action]. */
 private class LaunchAnim(
@@ -284,7 +295,14 @@ fun HomeScreen(
         Box(
             Modifier
                 .fillMaxSize()
-                .offset { IntOffset(0, -(pageAnim.value * screenH).roundToInt()) },
+                .offset { IntOffset(0, -(pageAnim.value * screenH).roundToInt()) }
+                // While an app zooms open, the home screen sinks back a little behind it.
+                .graphicsLayer {
+                    val p = if (launching != null) launchProgress.value else 0f
+                    scaleX = 1f - 0.06f * p
+                    scaleY = 1f - 0.06f * p
+                    alpha = 1f - 0.45f * p
+                },
         ) {
         // ── Top: weather ──
         Row(
@@ -331,6 +349,7 @@ fun HomeScreen(
                     onLaunch = { app, bounds ->
                         launching = LaunchAnim(bounds, app.banner ?: app.icon, app.banner != null) { vm.openApp(app) }
                     },
+                    onFocusIndex = { vm.homeFocus = it },
                     onStartMove = { moving = it.pkg },
                     onMove = { delta -> moving?.let { vm.moveApp(it, delta) } },
                     onEndMove = { moving = null },
@@ -338,12 +357,14 @@ fun HomeScreen(
             }
             if (pageAvailable) {
                 Spacer(Modifier.height(4.dp))
-                T(
-                    "⌄  למטה: המשך צפייה והמלצות",
-                    10.sp,
-                    color = Color.White.copy(alpha = 0.55f),
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                )
+                Box(
+                    Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .liquidGlass(RoundedCornerShape(50), 0.12f)
+                        .padding(horizontal = 12.dp, vertical = 2.dp),
+                ) {
+                    T("⌄  למטה: המשך צפייה והמלצות", 10.sp, color = Color.White.copy(alpha = 0.9f))
+                }
             }
         }
 
@@ -608,13 +629,14 @@ fun SideRail(
 
 @Composable
 fun SectionLabel(text: String) {
-    T(
-        text,
-        12.sp,
-        FontWeight.SemiBold,
-        Color.White.copy(alpha = 0.8f),
-        Modifier.padding(start = 8.dp, bottom = 4.dp),
-    )
+    Box(
+        Modifier
+            .padding(start = 8.dp, bottom = 6.dp)
+            .liquidGlass(RoundedCornerShape(50), 0.14f)
+            .padding(horizontal = 12.dp, vertical = 3.dp),
+    ) {
+        T(text, 12.sp, FontWeight.SemiBold)
+    }
 }
 
 // ───────────────────────── Continue watching ─────────────────────────
@@ -762,10 +784,12 @@ fun AppBar(
     listState: LazyListState,
     rowFocus: FocusRequester,
     onLaunch: (AppEntry, Rect) -> Unit,
+    onFocusIndex: (Int) -> Unit,
     onStartMove: (AppEntry) -> Unit,
     onMove: (Int) -> Unit,
     onEndMove: () -> Unit,
 ) {
+    val rowFocusState = remember { RowFocus() }
     GlassPanel(
         modifier = Modifier
             .fillMaxWidth()
@@ -782,6 +806,9 @@ fun AppBar(
             itemsIndexed(apps, key = { _, a -> a.pkg }) { index, app ->
                 AppTile(
                     app = app,
+                    index = index,
+                    row = rowFocusState,
+                    onFocusIndex = onFocusIndex,
                     isMoving = moving == app.pkg,
                     enabled = enabled,
                     focusRequester = if (index == 0) rowFocus else null,
@@ -808,8 +835,11 @@ private fun BannerImage(app: AppEntry, banner: ImageBitmap) {
 }
 
 @Composable
-fun AppTile(
+private fun AppTile(
     app: AppEntry,
+    index: Int,
+    row: RowFocus,
+    onFocusIndex: (Int) -> Unit,
     isMoving: Boolean,
     enabled: Boolean,
     focusRequester: FocusRequester?,
@@ -826,10 +856,27 @@ fun AppTile(
     // A spring feels alive and never "snaps" when focus moves quickly; it is read inside graphicsLayer
     // so the animation costs a redraw, not a recomposition.
     val scale by animateFloatAsState(
-        targetValue = if (focused) 1.08f else 1f,
-        animationSpec = if (animOn) spring(dampingRatio = 0.72f, stiffness = 500f) else snap(),
+        targetValue = if (focused) 1.1f else 1f,
+        animationSpec = if (animOn) spring(dampingRatio = 0.58f, stiffness = 420f) else snap(),
         label = "tileScale",
     )
+    // The rest of the row dims a little while one tile has focus (tvOS).
+    val dim by animateFloatAsState(
+        targetValue = if (row.index >= 0 && row.index != index) 0.62f else 1f,
+        animationSpec = if (animOn) tween(220) else snap(),
+        label = "tileDim",
+    )
+    // Parallax: the tile arrives tilted toward where focus came from and settles flat.
+    val tilt = remember { Animatable(0f) }
+    var tiltFrom by remember { mutableStateOf(1f) }
+    LaunchedEffect(focused) {
+        if (focused && animOn) {
+            tilt.snapTo(tiltFrom * 11f)
+            tilt.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 140f))
+        } else {
+            tilt.snapTo(0f)
+        }
+    }
     val shape = RoundedCornerShape(18.dp)
 
     Box(
@@ -839,7 +886,11 @@ fun AppTile(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                rotationY = tilt.value
+                cameraDistance = 14f * density
+                alpha = dim
             }
+            .liquidRing(focused && !isMoving, 18.dp)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onKeyEvent { ev ->
                 val k = ev.nativeKeyEvent.keyCode
@@ -878,20 +929,26 @@ fun AppTile(
                     false
                 }
             }
-            .tvFocusable(enabled) { focused = it }
+            .tvFocusable(enabled) { f ->
+                focused = f
+                if (f) {
+                    tiltFrom = if (index >= row.last) 1f else -1f
+                    row.last = index
+                    row.index = index
+                    onFocusIndex(index)
+                } else if (row.index == index) {
+                    row.index = -1
+                }
+            }
             .pointerInput(app.pkg) {
                 detectTapGestures(onTap = { onLaunch(bounds) }, onLongPress = { onLongPress() })
             }
-            .clip(shape)
-            .background(
-                if (app.banner != null) Brush.verticalGradient(listOf(Color(0xFF1B2030), Color(0xFF1B2030)))
-                else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.12f))),
-            )
             .then(
-                if (isMoving) Modifier.border(3.dp, Amber, shape)
-                else if (focused) Modifier.border(2.dp, Color.White, shape)
-                else Modifier,
-            ),
+                // Banner tiles keep their artwork and get the glass sheen on top; plain tiles are glass.
+                if (app.banner != null) Modifier.clip(shape).background(Color(0xFF1B2030)).glassOverlay(shape)
+                else Modifier.liquidGlass(shape, if (focused) 0.30f else 0.20f),
+            )
+            .then(if (isMoving) Modifier.border(3.dp, Amber, shape) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         val banner = app.banner
@@ -1087,10 +1144,9 @@ fun RoundButton(
             .focusBorder(focused, CircleShape, 3.dp)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .tvClickable(enabled, { focused = it }, onClick)
-            .clip(CircleShape)
-            .background(
-                if (filled) Color.White
-                else Color.White.copy(alpha = if (focused) 0.35f else 0.18f),
+            .then(
+                if (filled) Modifier.clip(CircleShape).background(Color.White)
+                else Modifier.liquidGlass(CircleShape, if (focused) 0.34f else 0.16f),
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -1109,8 +1165,7 @@ fun PillButton(text: String, enabled: Boolean, onClick: () -> Unit, modifier: Mo
         modifier
             .focusBorder(focused, shape)
             .tvClickable(enabled, { focused = it }, onClick)
-            .clip(shape)
-            .background(Color.White.copy(alpha = if (focused) 0.35f else 0.18f))
+            .liquidGlass(shape, if (focused) 0.34f else 0.16f)
             .padding(horizontal = 14.dp, vertical = 7.dp),
     ) {
         T(text, 12.sp, FontWeight.Medium)
@@ -1274,19 +1329,47 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
         }
     }
 
-    // Background gradient
+    val showLyrics = vm.showLyrics
+    val animOn = LocalAnimations.current
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    // Without lyrics the cover grows to fill the column.
+    val coverSize by animateDpAsState(
+        targetValue = if (showLyrics) 190.dp else 330.dp,
+        animationSpec = if (animOn) spring(dampingRatio = 0.75f, stiffness = 220f) else snap(),
+        label = "coverSize",
+    )
+
+    // Background: the cover's own tones, with two glows that drift slowly.
     Box(modifier.fillMaxSize().background(Color(0xFF0B0D14))) {
         val t = tones
         val c1 by animateColorAsState(t?.getOrNull(0) ?: Color(0xFF1A2233), tween(700), label = "c1")
         val c2 by animateColorAsState(t?.getOrNull(1) ?: Color(0xFF111827), tween(700), label = "c2")
         val c3 by animateColorAsState(t?.getOrNull(2) ?: Color(0xFF0B0D14), tween(700), label = "c3")
+        val drift = if (animOn) {
+            rememberInfiniteTransition(label = "playerBg").animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(40_000, easing = LinearEasing)),
+                label = "playerBgPhase",
+            )
+        } else {
+            null
+        }
         Canvas(Modifier.fillMaxSize()) {
+            val ph = (drift?.value ?: 0f) * 6.2832f
             drawRect(Brush.linearGradient(listOf(c1, c2, c3), start = Offset(0f, 0f), end = Offset(size.width, size.height)))
             drawRect(
                 Brush.radialGradient(
                     listOf(c2.copy(alpha = 0.55f), Color.Transparent),
-                    center = Offset(size.width * 0.28f, size.height * 0.5f),
+                    center = Offset(size.width * (0.28f + 0.10f * sin(ph)), size.height * (0.5f + 0.12f * cos(ph))),
                     radius = size.height * 0.9f,
+                ),
+            )
+            drawRect(
+                Brush.radialGradient(
+                    listOf(c1.copy(alpha = 0.50f), Color.Transparent),
+                    center = Offset(size.width * (0.78f + 0.08f * cos(ph)), size.height * (0.35f + 0.10f * sin(ph))),
+                    radius = size.height * 0.7f,
                 ),
             )
         }
@@ -1298,23 +1381,27 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
             horizontalArrangement = Arrangement.spacedBy(50.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // ── Left column: controls ─────────────────────────────────────────
+            // ── Controls column ───────────────────────────────────────────────
             Column(
                 Modifier.weight(0.95f).fillMaxHeight(),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                // Track title + artist
                 Column {
-                    T("מתנגן עכשיו", 13.sp, color = Color.White.copy(alpha = 0.7f))
-                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        Modifier
+                            .liquidGlass(RoundedCornerShape(50), 0.14f)
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                    ) {
+                        T("מתנגן עכשיו", 13.sp, FontWeight.Medium)
+                    }
+                    Spacer(Modifier.height(10.dp))
                     T(track.title, 40.sp, FontWeight.Bold, maxLines = 2)
                     if (track.artist.isNotEmpty()) {
                         Spacer(Modifier.height(6.dp))
-                        T(track.artist, 20.sp, color = Color.White.copy(alpha = 0.85f))
+                        T(track.artist, 20.sp, color = Color.White.copy(alpha = 0.9f))
                     }
                 }
 
-                // Playback controls + progress
                 Column {
                     Ltr {
                         Row(
@@ -1337,113 +1424,131 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
                     }
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        PillButton(if (showLyrics) "מילים: פועל" else "מילים: כבוי", true, { vm.toggleLyrics() })
                         PillButton("פתח אפליקציה", true, { vm.openPackage(track.appPackage) })
-                        PillButton(
-                            if (vm.sleepTimerOn) "יושהה בעוד 30 דקות ✓" else "השהה בעוד 30 דקות",
-                            true, { vm.toggleSleepTimer() },
-                        )
                     }
+                    Spacer(Modifier.height(8.dp))
+                    PillButton(
+                        if (vm.sleepTimerOn) "יושהה בעוד 30 דקות ✓" else "השהה בעוד 30 דקות",
+                        true, { vm.toggleSleepTimer() },
+                    )
                     Spacer(Modifier.height(18.dp))
                     WaveLine(fraction, track.playing, Modifier.fillMaxWidth().height(18.dp))
                     Spacer(Modifier.height(4.dp))
                     Ltr {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            T(formatMs(position), 12.sp, color = Color.White.copy(alpha = 0.8f))
+                            T(formatMs(position), 12.sp, color = Color.White.copy(alpha = 0.85f))
                             if (track.durationMs > 0)
-                                T("-" + formatMs(track.durationMs - position), 12.sp, color = Color.White.copy(alpha = 0.8f))
+                                T("-" + formatMs(track.durationMs - position), 12.sp, color = Color.White.copy(alpha = 0.85f))
                         }
                     }
                 }
             }
 
-            // ── Right column: cover art + lyrics ─────────────────────────────
+            // ── Cover art + lyrics column ─────────────────────────────────────
             Column(
                 Modifier.weight(1.05f).fillMaxHeight(),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // Cover art
+                val coverShape = RoundedCornerShape(26.dp)
                 if (art != null) {
                     Image(
                         bitmap = art,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
-                            .size(260.dp)
-                            .clip(RoundedCornerShape(24.dp)),
+                            .size(coverSize)
+                            .clip(coverShape)
+                            .glassOverlay(coverShape),
                     )
+                } else {
+                    Box(Modifier.size(coverSize).liquidGlass(coverShape, 0.14f), contentAlignment = Alignment.Center) {
+                        T("♪", 54.sp, color = Color.White.copy(alpha = 0.85f))
+                    }
                 }
-                Spacer(Modifier.height(24.dp))
 
-                // ── Lyrics panel ─────────────────────────────────────────────
-                val hasSynced = lyrics?.any { it.startMs >= 0 } == true
-                when {
-                    lyricsLoading -> {
-                        T("טוען מילים…", 14.sp, color = Color.White.copy(alpha = 0.5f))
-                    }
-                    lyrics.isNullOrEmpty() -> {
-                        T("מילים לא נמצאו", 13.sp, color = Color.White.copy(alpha = 0.35f))
-                    }
-                    else -> {
+                // ── Lyrics panel: dissolves in and out with the "מילים" button ──
+                AnimatedVisibility(
+                    visible = showLyrics,
+                    enter = if (animOn) fadeIn(tween(320)) + scaleIn(tween(380, easing = FastOutSlowInEasing), initialScale = 0.94f)
+                    else EnterTransition.None,
+                    exit = if (animOn) fadeOut(tween(200)) + scaleOut(tween(240, easing = FastOutSlowInEasing), targetScale = 0.96f)
+                    else ExitTransition.None,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Spacer(Modifier.height(22.dp))
                         Box(
                             Modifier
                                 .fillMaxWidth()
-                                .height(220.dp),
+                                .height(250.dp)
+                                .liquidGlass(RoundedCornerShape(28.dp), 0.10f),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            androidx.compose.foundation.lazy.LazyColumn(
-                                state = lyricsListState,
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(vertical = 80.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                itemsIndexed(lyrics, key = { i, _ -> i }) { i, line ->
-                                    val isActive = hasSynced && i == activeLine
-                                    val isPast   = hasSynced && i < activeLine
-                                    val animOn   = LocalAnimations.current
-                                    val lineScale by animateFloatAsState(
-                                        if (isActive) 1.07f else 1f,
-                                        if (animOn) spring(dampingRatio = 0.72f, stiffness = 350f) else snap(),
-                                        label = "lyricScale$i",
-                                    )
-                                    val alpha = when {
-                                        isActive -> 1f
-                                        isPast   -> 0.38f
-                                        else     -> 0.62f
-                                    }
-                                    androidx.compose.foundation.text.BasicText(
-                                        text = line.text,
-                                        style = androidx.compose.ui.text.TextStyle(
-                                            color = Color.White.copy(alpha = alpha),
-                                            fontSize = if (isActive) 20.sp else 17.sp,
-                                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                        ),
+                            val hasSynced = lyrics?.any { it.startMs >= 0 } == true
+                            when {
+                                lyricsLoading -> T("טוען מילים…", 14.sp, color = Color.White.copy(alpha = 0.85f))
+                                lyrics.isNullOrEmpty() -> T("לא נמצאו מילים לשיר הזה", 14.sp, color = Color.White.copy(alpha = 0.85f))
+                                else -> {
+                                    androidx.compose.foundation.lazy.LazyColumn(
+                                        state = lyricsListState,
                                         modifier = Modifier
-                                            .fillMaxWidth()
-                                            .graphicsLayer { scaleX = lineScale; scaleY = lineScale },
-                                    )
+                                            .fillMaxSize()
+                                            // Lines fade out toward the top and bottom of the glass.
+                                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                                            .drawWithContent {
+                                                drawContent()
+                                                drawRect(
+                                                    Brush.verticalGradient(
+                                                        0f to Color.Transparent,
+                                                        0.28f to Color.Black,
+                                                        0.72f to Color.Black,
+                                                        1f to Color.Transparent,
+                                                    ),
+                                                    blendMode = BlendMode.DstIn,
+                                                )
+                                            },
+                                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 84.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        itemsIndexed(lyrics, key = { i, _ -> i }) { i, line ->
+                                            val isActive = hasSynced && i == activeLine
+                                            val isPast = hasSynced && i < activeLine
+                                            val lineScale by animateFloatAsState(
+                                                if (isActive) 1.12f else 1f,
+                                                if (animOn) spring(dampingRatio = 0.6f, stiffness = 300f) else snap(),
+                                                label = "lyricScale",
+                                            )
+                                            val lineAlpha by animateFloatAsState(
+                                                when {
+                                                    isActive -> 1f
+                                                    isPast -> 0.5f
+                                                    else -> 0.72f
+                                                },
+                                                if (animOn) tween(300) else snap(),
+                                                label = "lyricAlpha",
+                                            )
+                                            androidx.compose.foundation.text.BasicText(
+                                                text = line.text,
+                                                style = androidx.compose.ui.text.TextStyle(
+                                                    color = Color.White,
+                                                    fontSize = 19.sp,
+                                                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                                                ),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .graphicsLayer {
+                                                        transformOrigin = TransformOrigin(if (rtl) 1f else 0f, 0.5f)
+                                                        scaleX = lineScale
+                                                        scaleY = lineScale
+                                                        alpha = lineAlpha
+                                                    },
+                                            )
+                                        }
+                                    }
                                 }
                             }
-                            // fade top + bottom edges so text fades out gracefully
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(80.dp)
-                                    .align(Alignment.TopCenter)
-                                    .background(
-                                        Brush.verticalGradient(listOf(c3.copy(alpha = 0.95f), Color.Transparent)),
-                                    ),
-                            )
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(80.dp)
-                                    .align(Alignment.BottomCenter)
-                                    .background(
-                                        Brush.verticalGradient(listOf(Color.Transparent, c3.copy(alpha = 0.95f))),
-                                    ),
-                            )
                         }
                     }
                 }

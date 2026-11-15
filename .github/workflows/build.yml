@@ -2,7 +2,7 @@ name: Build signed APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, liquid-glass]
   workflow_dispatch:
 
 concurrency:
@@ -50,11 +50,11 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-        run: gradle :app:assembleRelease --no-daemon --stacktrace
+        run: gradle -p GlassLauncher :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify signature
         run: |
-          APK=app/build/outputs/apk/release/app-release.apk
+          APK=GlassLauncher/app/build/outputs/apk/release/app-release.apk
           BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)
           "${BT}apksigner" verify --print-certs "$APK"
           mkdir -p dist
