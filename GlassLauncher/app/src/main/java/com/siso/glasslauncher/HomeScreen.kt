@@ -1447,26 +1447,22 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
 
     // Background: blurred cover art + dark overlay
     Box(modifier.fillMaxSize().background(Color(0xFF0B0D14))) {
-        // Blurred cover background (2)
-        if (art != null) {
+        // Blurred cover background (2): tiny bitmap scaled up = cheap blur
+        val blurredArt = remember(track.art) {
+            val src = track.art ?: return@remember null
+            // scale down to ~8px then let the GPU upscale — gives a heavy blur for free
+            android.graphics.Bitmap.createScaledBitmap(src, 8, 8, true).asImageBitmap()
+        }
+        if (blurredArt != null) {
             Image(
-                bitmap = art,
+                bitmap = blurredArt,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer {
-                        if (android.os.Build.VERSION.SDK_INT >= 31) {
-                            renderEffect = androidx.compose.ui.graphics.RenderEffect.asComposeRenderEffect(
-                                android.graphics.RenderEffect.createBlurEffect(80f, 80f, android.graphics.Shader.TileMode.CLAMP)
-                            )
-                        } else {
-                            alpha = 0.35f
-                        }
-                    }
                     .drawWithContent {
                         drawContent()
-                        drawRect(Color(0xBB000000))
+                        drawRect(Color(0xCC000000))
                     },
             )
         } else {
