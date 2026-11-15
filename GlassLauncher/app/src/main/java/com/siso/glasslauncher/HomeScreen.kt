@@ -1493,9 +1493,7 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
                 else ExitTransition.None,
             ) {
                 Box(
-                    Modifier
-                        .fillMaxSize()
-                        .liquidGlass(RoundedCornerShape(28.dp), 0.10f),
+                    Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
                     val shown = lyrics
