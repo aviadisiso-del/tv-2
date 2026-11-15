@@ -1439,13 +1439,6 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
         }
     }
 
-    // Without lyrics the cover grows to fill the column.
-    val coverSize by animateDpAsState(
-        targetValue = if (lyricsVisible) 190.dp else 330.dp,
-        animationSpec = if (animOn) spring(dampingRatio = 0.75f, stiffness = 220f) else snap(),
-        label = "coverSize",
-    )
-
     // Background: the cover's own tones, with two glows that drift slowly.
     Box(modifier.fillMaxSize().background(Color(0xFF0B0D14))) {
         val t = tones
@@ -1484,16 +1477,115 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
         Row(
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = 90.dp, vertical = 60.dp),
-            horizontalArrangement = Arrangement.spacedBy(50.dp),
+                .padding(horizontal = 60.dp, vertical = 48.dp),
+            horizontalArrangement = Arrangement.spacedBy(40.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // ── Controls column ───────────────────────────────────────────────
-            Column(
-                Modifier.weight(0.95f).fillMaxHeight(),
-                verticalArrangement = Arrangement.SpaceBetween,
+            // ── LEFT: Lyrics panel (half screen, full height) ─────────────────
+            AnimatedVisibility(
+                visible = lyricsVisible,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                enter = if (animOn) fadeIn(tween(320)) + slideInHorizontally(tween(380, easing = FastOutSlowInEasing)) { -it / 4 }
+                else EnterTransition.None,
+                exit = if (animOn) fadeOut(tween(200)) + slideOutHorizontally(tween(240, easing = FastOutSlowInEasing)) { -it / 4 }
+                else ExitTransition.None,
             ) {
-                Column {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .liquidGlass(RoundedCornerShape(28.dp), 0.10f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val shown = lyrics
+                    if (shown != null) {
+                        val hasSynced = shown.any { it.startMs >= 0 }
+                        androidx.compose.foundation.lazy.LazyColumn(
+                            state = lyricsListState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                                .drawWithContent {
+                                    drawContent()
+                                    drawRect(
+                                        Brush.verticalGradient(
+                                            0f to Color.Transparent,
+                                            0.18f to Color.Black,
+                                            0.82f to Color.Black,
+                                            1f to Color.Transparent,
+                                        ),
+                                        blendMode = BlendMode.DstIn,
+                                    )
+                                },
+                            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 160.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            itemsIndexed(shown, key = { i, _ -> i }) { i, line ->
+                                val isActive = hasSynced && i == activeLine
+                                val isPast = hasSynced && i < activeLine
+                                val lineScale by animateFloatAsState(
+                                    if (isActive) 1.10f else 1f,
+                                    if (animOn) spring(dampingRatio = 0.6f, stiffness = 300f) else snap(),
+                                    label = "lyricScale",
+                                )
+                                val lineAlpha by animateFloatAsState(
+                                    when {
+                                        isActive -> 1f
+                                        isPast -> 0.45f
+                                        else -> 0.65f
+                                    },
+                                    if (animOn) tween(300) else snap(),
+                                    label = "lyricAlpha",
+                                )
+                                androidx.compose.foundation.text.BasicText(
+                                    text = line.text,
+                                    style = androidx.compose.ui.text.TextStyle(
+                                        color = Color.White,
+                                        fontSize = 20.sp,
+                                        fontFamily = AppFont,
+                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .graphicsLayer {
+                                            transformOrigin = TransformOrigin(0.5f, 0.5f)
+                                            scaleX = lineScale
+                                            scaleY = lineScale
+                                            alpha = lineAlpha
+                                        },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── RIGHT: Cover art + controls ───────────────────────────────────
+            Column(
+                Modifier.weight(1f).fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // Cover art — fixed size regardless of lyrics visibility
+                val coverShape = RoundedCornerShape(26.dp)
+                if (art != null) {
+                    Image(
+                        bitmap = art,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(200.dp)
+                            .clip(coverShape)
+                            .glassOverlay(coverShape),
+                    )
+                } else {
+                    Box(Modifier.size(200.dp).liquidGlass(coverShape, 0.14f), contentAlignment = Alignment.Center) {
+                        T("♪", 54.sp, color = Color.White.copy(alpha = 0.85f))
+                    }
+                }
+
+                // Track info
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         Modifier
                             .liquidGlass(RoundedCornerShape(50), 0.14f)
@@ -1501,36 +1593,46 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
                     ) {
                         T("מתנגן עכשיו", 13.sp, FontWeight.Medium)
                     }
-                    Spacer(Modifier.height(10.dp))
-                    T(track.title, 40.sp, FontWeight.Bold, maxLines = 2)
+                    Spacer(Modifier.height(8.dp))
+                    T(track.title, 28.sp, FontWeight.Bold, maxLines = 2, modifier = Modifier.fillMaxWidth())
                     if (track.artist.isNotEmpty()) {
-                        Spacer(Modifier.height(6.dp))
-                        T(track.artist, 20.sp, color = Color.White.copy(alpha = 0.9f))
+                        Spacer(Modifier.height(4.dp))
+                        T(track.artist, 17.sp, color = Color.White.copy(alpha = 0.9f))
                     }
                 }
 
-                Column {
+                // Playback controls
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Ltr {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            RoundButton(Glyph.Replay15, 48.dp, false, true,
+                            RoundButton(Glyph.Replay15, 44.dp, false, true,
                                 { tc.seekTo((track.currentPositionMs() - 15_000).coerceAtLeast(0L)) }, badge = "15")
-                            RoundButton(Glyph.Prev, 48.dp, false, true, { tc.skipToPrevious() })
+                            RoundButton(Glyph.Prev, 44.dp, false, true, { tc.skipToPrevious() })
                             RoundButton(
                                 if (track.playing) Glyph.Pause else Glyph.Play,
-                                70.dp, true, true,
+                                64.dp, true, true,
                                 { if (track.playing) tc.pause() else tc.play() },
                                 focusRequester = focus,
                             )
-                            RoundButton(Glyph.Next, 48.dp, false, true, { tc.skipToNext() })
-                            RoundButton(Glyph.Forward15, 48.dp, false, true,
+                            RoundButton(Glyph.Next, 44.dp, false, true, { tc.skipToNext() })
+                            RoundButton(Glyph.Forward15, 44.dp, false, true,
                                 { tc.seekTo(track.currentPositionMs() + 15_000) }, badge = "15")
                         }
                     }
-                    Spacer(Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Spacer(Modifier.height(14.dp))
+                    SeekBar(
+                        position = position,
+                        durationMs = track.durationMs,
+                        onSeek = { to ->
+                            tc.seekTo(to)
+                            position = to
+                        },
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         PillButton(
                             when {
                                 lyricsLoading -> "מחפש מילים…"
@@ -1543,129 +1645,11 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
                         )
                         PillButton("פתח אפליקציה", true, { vm.openPackage(track.appPackage) })
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     PillButton(
                         if (vm.sleepTimerOn) "יושהה בעוד 30 דקות ✓" else "השהה בעוד 30 דקות",
                         true, { vm.toggleSleepTimer() },
                     )
-                    Spacer(Modifier.height(18.dp))
-                    SeekBar(
-                        position = position,
-                        durationMs = track.durationMs,
-                        onSeek = { to ->
-                            tc.seekTo(to)
-                            position = to
-                        },
-                    )
-                }
-            }
-
-            // ── Cover art + lyrics column ─────────────────────────────────────
-            Column(
-                Modifier.weight(1.05f).fillMaxHeight(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                val coverShape = RoundedCornerShape(26.dp)
-                if (art != null) {
-                    Image(
-                        bitmap = art,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(coverSize)
-                            .clip(coverShape)
-                            .glassOverlay(coverShape),
-                    )
-                } else {
-                    Box(Modifier.size(coverSize).liquidGlass(coverShape, 0.14f), contentAlignment = Alignment.Center) {
-                        T("♪", 54.sp, color = Color.White.copy(alpha = 0.85f))
-                    }
-                }
-
-                // ── Lyrics panel: dissolves in and out with the "מילים" button ──
-                AnimatedVisibility(
-                    visible = lyricsVisible,
-                    enter = if (animOn) fadeIn(tween(320)) + scaleIn(tween(380, easing = FastOutSlowInEasing), initialScale = 0.94f)
-                    else EnterTransition.None,
-                    exit = if (animOn) fadeOut(tween(200)) + scaleOut(tween(240, easing = FastOutSlowInEasing), targetScale = 0.96f)
-                    else ExitTransition.None,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Spacer(Modifier.height(22.dp))
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(250.dp)
-                                .liquidGlass(RoundedCornerShape(28.dp), 0.10f),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            val shown = lyrics
-                            if (shown != null) {
-                                val hasSynced = shown.any { it.startMs >= 0 }
-                                run {
-                                    androidx.compose.foundation.lazy.LazyColumn(
-                                        state = lyricsListState,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            // Lines fade out toward the top and bottom of the glass.
-                                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                                            .drawWithContent {
-                                                drawContent()
-                                                drawRect(
-                                                    Brush.verticalGradient(
-                                                        0f to Color.Transparent,
-                                                        0.28f to Color.Black,
-                                                        0.72f to Color.Black,
-                                                        1f to Color.Transparent,
-                                                    ),
-                                                    blendMode = BlendMode.DstIn,
-                                                )
-                                            },
-                                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 110.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        itemsIndexed(shown, key = { i, _ -> i }) { i, line ->
-                                            val isActive = hasSynced && i == activeLine
-                                            val isPast = hasSynced && i < activeLine
-                                            val lineScale by animateFloatAsState(
-                                                if (isActive) 1.12f else 1f,
-                                                if (animOn) spring(dampingRatio = 0.6f, stiffness = 300f) else snap(),
-                                                label = "lyricScale",
-                                            )
-                                            val lineAlpha by animateFloatAsState(
-                                                when {
-                                                    isActive -> 1f
-                                                    isPast -> 0.5f
-                                                    else -> 0.72f
-                                                },
-                                                if (animOn) tween(300) else snap(),
-                                                label = "lyricAlpha",
-                                            )
-                                            androidx.compose.foundation.text.BasicText(
-                                                text = line.text,
-                                                style = androidx.compose.ui.text.TextStyle(
-                                                    color = Color.White,
-                                                    fontSize = 19.sp,
-                                                    fontFamily = AppFont,
-                                                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Start,
-                                                ),
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .graphicsLayer {
-                                                        transformOrigin = TransformOrigin(if (rtl) 1f else 0f, 0.5f)
-                                                        scaleX = lineScale
-                                                        scaleY = lineScale
-                                                        alpha = lineAlpha
-                                                    },
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
