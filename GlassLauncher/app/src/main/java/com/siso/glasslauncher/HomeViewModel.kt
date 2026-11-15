@@ -261,7 +261,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 val key = if (t != null) "${t.title}|${t.artist}" else null
                 if (key != lastLyricsTrack) {
                     lastLyricsTrack = key
-                    if (t != null && t.artist.isNotBlank()) {
+                    if (t != null && t.title.isNotBlank()) {
                         fetchLyrics(t.title, t.artist, t.durationMs)
                     } else {
                         lyrics = null
