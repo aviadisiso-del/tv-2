@@ -24,6 +24,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -1485,9 +1487,9 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
             AnimatedVisibility(
                 visible = lyricsVisible,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
-                enter = if (animOn) fadeIn(tween(320)) + slideInHorizontally(tween(380, easing = FastOutSlowInEasing)) { -it / 4 }
+                enter = if (animOn) fadeIn(tween(320)) + slideInHorizontally(tween(380, easing = FastOutSlowInEasing)) { w -> -w / 4 }
                 else EnterTransition.None,
-                exit = if (animOn) fadeOut(tween(200)) + slideOutHorizontally(tween(240, easing = FastOutSlowInEasing)) { -it / 4 }
+                exit = if (animOn) fadeOut(tween(200)) + slideOutHorizontally(tween(240, easing = FastOutSlowInEasing)) { w -> -w / 4 }
                 else ExitTransition.None,
             ) {
                 Box(
