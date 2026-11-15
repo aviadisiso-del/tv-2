@@ -38,6 +38,26 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.font.FontWeight
+
+/**
+ * Heebo (SIL OFL, see /licenses): one variable font file for Hebrew and Latin.
+ * Every weight is a real instance on the `wght` axis, not a synthesized bold.
+ */
+@OptIn(ExperimentalTextApi::class)
+val AppFont: FontFamily = FontFamily(
+    listOf(FontWeight.Light, FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold).map { w ->
+        Font(
+            resId = R.font.heebo_variable,
+            weight = w,
+            variationSettings = FontVariation.Settings(FontVariation.weight(w.weight)),
+        )
+    },
+)
 
 /*
  * Liquid Glass look, drawn with plain gradients (no real-time blur) so it stays smooth

@@ -73,6 +73,36 @@ object PhotoStore {
     private const val OUT_H = 1080
     private const val MAX_BYTES = 40 * 1024 * 1024
 
+    /** A real landscape photo that ships inside the app. */
+    class Landscape(val name: String, val resId: Int, val title: String)
+
+    /** Public-domain photos (Unsplash, via the Pop!_OS wallpapers collection); credits in /licenses. */
+    val landscapes: List<Landscape> = listOf(
+        Landscape("land_snow_peaks", R.drawable.land_snow_peaks, "פסגות מושלגות"),
+        Landscape("land_mountain_lake", R.drawable.land_mountain_lake, "אגם הרים"),
+        Landscape("land_canyon", R.drawable.land_canyon, "קניון"),
+        Landscape("land_desert", R.drawable.land_desert, "מדבר"),
+        Landscape("land_night_dunes", R.drawable.land_night_dunes, "דיונות בלילה"),
+        Landscape("land_star_trails", R.drawable.land_star_trails, "שובלי כוכבים"),
+    )
+
+    fun landscape(name: String): Landscape? = landscapes.firstOrNull { it.name == name }
+
+    fun exists(ctx: Context, name: String): Boolean = landscape(name) != null || file(ctx, name).exists()
+
+    private fun decode(ctx: Context, name: String, sample: Int): Bitmap? =
+        try {
+            val opts = BitmapFactory.Options().apply {
+                inSampleSize = sample
+                inScaled = false
+            }
+            val built = landscape(name)
+            if (built != null) BitmapFactory.decodeResource(ctx.resources, built.resId, opts)
+            else BitmapFactory.decodeFile(file(ctx, name).absolutePath, opts)
+        } catch (e: Throwable) {
+            null
+        }
+
     private fun dir(ctx: Context): File = File(ctx.filesDir, "wallpapers").apply { mkdirs() }
 
     fun file(ctx: Context, name: String): File = File(dir(ctx), name)
@@ -84,22 +114,9 @@ object PhotoStore {
             ?.map { it.name }
             ?: emptyList()
 
-    fun load(ctx: Context, name: String): Bitmap? =
-        try {
-            BitmapFactory.decodeFile(file(ctx, name).absolutePath)
-        } catch (e: Throwable) {
-            null
-        }
+    fun load(ctx: Context, name: String): Bitmap? = decode(ctx, name, 1)
 
-    fun thumb(ctx: Context, name: String): Bitmap? =
-        try {
-            BitmapFactory.decodeFile(
-                file(ctx, name).absolutePath,
-                BitmapFactory.Options().apply { inSampleSize = 8 },
-            )
-        } catch (e: Throwable) {
-            null
-        }
+    fun thumb(ctx: Context, name: String): Bitmap? = decode(ctx, name, 8)
 
     fun delete(ctx: Context, name: String) {
         runCatching { file(ctx, name).delete() }

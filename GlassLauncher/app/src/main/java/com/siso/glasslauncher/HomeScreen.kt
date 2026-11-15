@@ -106,6 +106,10 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.sin
 import kotlin.math.cos
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
@@ -1212,6 +1216,96 @@ fun WaveLine(progress: Float, playing: Boolean, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Time bar of the full-screen player: elapsed time, a glass track with the played part filled,
+ * a knob, and the song length. When it has focus, ◀ ▶ jump 10 seconds.
+ */
+@Composable
+fun SeekBar(position: Long, durationMs: Long, onSeek: (Long) -> Unit, modifier: Modifier = Modifier) {
+    var focused by remember { mutableStateOf(false) }
+    val animOn = LocalAnimations.current
+    val fraction = if (durationMs > 0) (position.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+    val shown by animateFloatAsState(
+        targetValue = fraction,
+        animationSpec = if (animOn) tween(500, easing = LinearEasing) else snap(),
+        label = "seekFraction",
+    )
+    val grow by animateFloatAsState(
+        targetValue = if (focused) 1f else 0f,
+        animationSpec = if (animOn) spring(dampingRatio = 0.6f, stiffness = 400f) else snap(),
+        label = "seekFocus",
+    )
+    Column(modifier.fillMaxWidth()) {
+        Ltr {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .onKeyEvent { ev ->
+                        val k = ev.nativeKeyEvent.keyCode
+                        if (ev.type != KeyEventType.KeyDown || durationMs <= 0) {
+                            false
+                        } else if (k == AKeyEvent.KEYCODE_DPAD_LEFT) {
+                            onSeek((position - 10_000L).coerceAtLeast(0L))
+                            true
+                        } else if (k == AKeyEvent.KEYCODE_DPAD_RIGHT) {
+                            onSeek((position + 10_000L).coerceAtMost(durationMs))
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    .tvFocusable(true) { focused = it },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                T(formatMs(position), 14.sp, FontWeight.Medium)
+                Canvas(Modifier.weight(1f).height(28.dp)) {
+                    val mid = size.height / 2f
+                    val h = lerp(6.dp.toPx(), 10.dp.toPx(), grow)
+                    val r = h / 2f
+                    val px = size.width * shown
+                    drawRoundRect(
+                        color = Color.White.copy(alpha = 0.22f),
+                        topLeft = Offset(0f, mid - r),
+                        size = Size(size.width, h),
+                        cornerRadius = CornerRadius(r, r),
+                    )
+                    drawRoundRect(
+                        color = Color.White.copy(alpha = 0.40f),
+                        topLeft = Offset(0f, mid - r),
+                        size = Size(size.width, h),
+                        cornerRadius = CornerRadius(r, r),
+                        style = Stroke(width = 1.dp.toPx()),
+                    )
+                    if (px > 0f) {
+                        drawRoundRect(
+                            brush = Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.75f), Color.White)),
+                            topLeft = Offset(0f, mid - r),
+                            size = Size(px.coerceAtLeast(h), h),
+                            cornerRadius = CornerRadius(r, r),
+                        )
+                    }
+                    val knob = lerp(7.dp.toPx(), 11.dp.toPx(), grow)
+                    drawCircle(Color.White.copy(alpha = 0.25f), radius = knob * 1.8f, center = Offset(px, mid))
+                    drawCircle(Color.White, radius = knob, center = Offset(px, mid))
+                }
+                T(
+                    if (durationMs > 0) formatMs(durationMs) else "--:--",
+                    14.sp,
+                    FontWeight.Medium,
+                    Color.White.copy(alpha = 0.85f),
+                )
+            }
+        }
+        T(
+            if (focused) "◀ ▶ דילוג של 10 שניות" else " ",
+            11.sp,
+            color = Color.White.copy(alpha = 0.85f),
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
+    }
+}
+
 @Composable
 fun MusicStrip(track: Track, enabled: Boolean, vm: HomeViewModel, onExpand: () -> Unit) {
     var position by remember(track) { mutableStateOf(track.currentPositionMs()) }
@@ -1319,22 +1413,35 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
             idx
         }
     }
-    val lyricsListState = rememberLazyListState()
-    LaunchedEffect(activeLine) {
-        if (activeLine >= 0) {
-            lyricsListState.animateScrollToItem(
-                (activeLine - 1).coerceAtLeast(0),
-                scrollOffset = 0,
-            )
-        }
-    }
-
     val showLyrics = vm.showLyrics
     val animOn = LocalAnimations.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    // No lyrics for this song -> the player falls back to the big-cover view by itself.
+    val noLyrics = !lyricsLoading && lyrics.isNullOrEmpty()
+    val lyricsVisible = showLyrics && !lyrics.isNullOrEmpty()
+    val lyricsListState = rememberLazyListState()
+    // Keep the line being sung exactly in the middle of the panel, gliding instead of jumping.
+    LaunchedEffect(activeLine, lyricsVisible) {
+        if (activeLine >= 0 && lyricsVisible) {
+            // The panel has just appeared: give it a moment to be laid out.
+            if (lyricsListState.layoutInfo.visibleItemsInfo.isEmpty()) delay(150)
+            if (lyricsListState.layoutInfo.visibleItemsInfo.none { it.index == activeLine }) {
+                lyricsListState.scrollToItem(activeLine)
+            }
+            val info = lyricsListState.layoutInfo
+            val item = info.visibleItemsInfo.firstOrNull { it.index == activeLine }
+            if (item != null) {
+                val center = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+                val delta = item.offset + item.size / 2f - center
+                if (animOn) lyricsListState.animateScrollBy(delta, spring(dampingRatio = 0.9f, stiffness = 110f))
+                else lyricsListState.scrollBy(delta)
+            }
+        }
+    }
+
     // Without lyrics the cover grows to fill the column.
     val coverSize by animateDpAsState(
-        targetValue = if (showLyrics) 190.dp else 330.dp,
+        targetValue = if (lyricsVisible) 190.dp else 330.dp,
         animationSpec = if (animOn) spring(dampingRatio = 0.75f, stiffness = 220f) else snap(),
         label = "coverSize",
     )
@@ -1424,7 +1531,16 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
                     }
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PillButton(if (showLyrics) "מילים: פועל" else "מילים: כבוי", true, { vm.toggleLyrics() })
+                        PillButton(
+                            when {
+                                lyricsLoading -> "מחפש מילים…"
+                                noLyrics -> "אין מילים"
+                                showLyrics -> "מילים: פועל"
+                                else -> "מילים: כבוי"
+                            },
+                            true,
+                            { if (!noLyrics && !lyricsLoading) vm.toggleLyrics() },
+                        )
                         PillButton("פתח אפליקציה", true, { vm.openPackage(track.appPackage) })
                     }
                     Spacer(Modifier.height(8.dp))
@@ -1433,15 +1549,14 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
                         true, { vm.toggleSleepTimer() },
                     )
                     Spacer(Modifier.height(18.dp))
-                    WaveLine(fraction, track.playing, Modifier.fillMaxWidth().height(18.dp))
-                    Spacer(Modifier.height(4.dp))
-                    Ltr {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            T(formatMs(position), 12.sp, color = Color.White.copy(alpha = 0.85f))
-                            if (track.durationMs > 0)
-                                T("-" + formatMs(track.durationMs - position), 12.sp, color = Color.White.copy(alpha = 0.85f))
-                        }
-                    }
+                    SeekBar(
+                        position = position,
+                        durationMs = track.durationMs,
+                        onSeek = { to ->
+                            tc.seekTo(to)
+                            position = to
+                        },
+                    )
                 }
             }
 
@@ -1470,7 +1585,7 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
 
                 // ── Lyrics panel: dissolves in and out with the "מילים" button ──
                 AnimatedVisibility(
-                    visible = showLyrics,
+                    visible = lyricsVisible,
                     enter = if (animOn) fadeIn(tween(320)) + scaleIn(tween(380, easing = FastOutSlowInEasing), initialScale = 0.94f)
                     else EnterTransition.None,
                     exit = if (animOn) fadeOut(tween(200)) + scaleOut(tween(240, easing = FastOutSlowInEasing), targetScale = 0.96f)
@@ -1485,11 +1600,10 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
                                 .liquidGlass(RoundedCornerShape(28.dp), 0.10f),
                             contentAlignment = Alignment.Center,
                         ) {
-                            val hasSynced = lyrics?.any { it.startMs >= 0 } == true
-                            when {
-                                lyricsLoading -> T("טוען מילים…", 14.sp, color = Color.White.copy(alpha = 0.85f))
-                                lyrics.isNullOrEmpty() -> T("לא נמצאו מילים לשיר הזה", 14.sp, color = Color.White.copy(alpha = 0.85f))
-                                else -> {
+                            val shown = lyrics
+                            if (shown != null) {
+                                val hasSynced = shown.any { it.startMs >= 0 }
+                                run {
                                     androidx.compose.foundation.lazy.LazyColumn(
                                         state = lyricsListState,
                                         modifier = Modifier
@@ -1508,10 +1622,10 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
                                                     blendMode = BlendMode.DstIn,
                                                 )
                                             },
-                                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 84.dp),
+                                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 110.dp),
                                         verticalArrangement = Arrangement.spacedBy(8.dp),
                                     ) {
-                                        itemsIndexed(lyrics, key = { i, _ -> i }) { i, line ->
+                                        itemsIndexed(shown, key = { i, _ -> i }) { i, line ->
                                             val isActive = hasSynced && i == activeLine
                                             val isPast = hasSynced && i < activeLine
                                             val lineScale by animateFloatAsState(
@@ -1533,6 +1647,7 @@ fun MusicExpanded(track: Track, vm: HomeViewModel, focus: FocusRequester, modifi
                                                 style = androidx.compose.ui.text.TextStyle(
                                                     color = Color.White,
                                                     fontSize = 19.sp,
+                                                    fontFamily = AppFont,
                                                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
                                                     textAlign = androidx.compose.ui.text.style.TextAlign.Start,
                                                 ),

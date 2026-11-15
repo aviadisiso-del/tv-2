@@ -242,7 +242,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         val savedPhoto = prefs.wallpaperPhoto
-        if (savedPhoto.isNotEmpty() && PhotoStore.file(app, savedPhoto).exists()) usePhoto(savedPhoto)
+        if (savedPhoto.isNotEmpty() && PhotoStore.exists(app, savedPhoto)) usePhoto(savedPhoto)
         else setWallpaper(wallpaperIndex)
         reloadPhotos()
         reloadApps()
@@ -420,7 +420,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             val ctx = getApplication<Application>()
             val names = PhotoStore.list(ctx)
-            val fresh = names.filter { it !in photoThumbs }.mapNotNull { n ->
+            val fresh = (PhotoStore.landscapes.map { it.name } + names).filter { it !in photoThumbs }.mapNotNull { n ->
                 PhotoStore.thumb(ctx, n)?.let { n to it.asImageBitmap() }
             }
             withContext(Dispatchers.Main) {

@@ -385,7 +385,7 @@ fun SettingsPanel(vm: HomeViewModel, onClose: () -> Unit, modifier: Modifier = M
                         item {
                             SettingRow(
                                 "טפטים",
-                                value = if (vm.wallpaperPhoto.isNotEmpty()) "תמונה שלי"
+                                value = if (vm.wallpaperPhoto.isNotEmpty()) (PhotoStore.landscape(vm.wallpaperPhoto)?.title ?: "תמונה שלי")
                                         else if (vm.wallpaperIndex == LIVE_SKY_INDEX) "שמיים חיים 🌅"
                                         else Wallpapers.all[vm.wallpaperIndex].name,
                                 chevron = true,
@@ -476,6 +476,22 @@ fun SettingsPanel(vm: HomeViewModel, onClose: () -> Unit, modifier: Modifier = M
                                 ThumbGap(3 - row.size)
                             }
                         }
+                        item { InfoText("תמונות נוף") }
+                        itemsIndexed(PhotoStore.landscapes.chunked(3)) { _, row ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                row.forEach { land ->
+                                    WallThumb(
+                                        name = land.title,
+                                        selected = vm.wallpaperPhoto == land.name,
+                                        image = vm.photoThumbs[land.name],
+                                    ) { vm.usePhoto(land.name) }
+                                }
+                                ThumbGap(3 - row.size)
+                            }
+                        }
                         item { InfoText("התמונות שלי") }
                         if (vm.photos.isEmpty()) {
                             item { InfoText("עדיין אין כאן תמונות. אפשר להוסיף מהטלפון או מכונן USB.") }
@@ -497,7 +513,7 @@ fun SettingsPanel(vm: HomeViewModel, onClose: () -> Unit, modifier: Modifier = M
                         }
                         item { SettingRow("הוסף תמונות מהטלפון (קוד QR)", chevron = true) { page = Page.AddPhone } }
                         item { SettingRow("הוסף תמונות מכונן USB", chevron = true) { page = Page.AddUsb } }
-                        if (vm.wallpaperPhoto.isNotEmpty()) {
+                        if (vm.wallpaperPhoto.isNotEmpty() && PhotoStore.landscape(vm.wallpaperPhoto) == null) {
                             item { SettingRow("🗑 מחק את התמונה הנוכחית") { vm.deletePhoto(vm.wallpaperPhoto) } }
                         }
                         item {

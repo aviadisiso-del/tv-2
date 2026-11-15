@@ -1,0 +1,11 @@
+Landscape wallpapers bundled in GlassLauncher/app/src/main/res/drawable-nodpi
+
+Source: the Pop!_OS wallpapers collection (https://github.com/pop-os/wallpapers), which lists
+these Unsplash photos as public domain. Each was cropped and scaled to 1920x1080.
+
+land_snow_peaks.jpg     Benjamin Voros     https://unsplash.com/photos/yrwpJwDNSHE
+land_canyon.jpg         Jad Limcaco        https://unsplash.com/photos/JEq_2UJoTtg
+land_night_dunes.jpg    Jared Evans        https://unsplash.com/photos/Wwg1TzCuV9E
+land_desert.jpg         Jasper van der Meij https://unsplash.com/photos/eKpO8DlBvo0 (edit by @cassidyjames)
+land_mountain_lake.jpg  Sean Afnan         https://unsplash.com/@sean82?photo=i17Ln-C-qhE
+land_star_trails.jpg    Ahmadreza Sajadi   https://unsplash.com/photos/55xd_uiUYEE (edit by @cassidyjames)

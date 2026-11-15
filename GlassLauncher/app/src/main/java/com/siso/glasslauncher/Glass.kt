@@ -146,7 +146,7 @@ fun T(
     BasicText(
         text = text,
         modifier = modifier,
-        style = TextStyle(color = color, fontSize = size, fontWeight = weight),
+        style = TextStyle(color = color, fontSize = size, fontWeight = weight, fontFamily = AppFont),
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
     )
